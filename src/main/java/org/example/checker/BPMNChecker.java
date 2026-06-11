@@ -1,0 +1,1299 @@
+package org.example.checker;
+
+import org.example.model.*;
+import org.example.parser.MermaidParser;
+
+import javax.imageio.plugins.tiff.TIFFDirectory;
+import javax.sound.midi.MidiFileFormat;
+import java.security.spec.ECGenParameterSpec;
+import java.util.*;
+import java.util.stream.Stream;
+
+public class BPMNChecker {
+
+    // private MermaidParser parser;
+    private LinkedHashMap<String, Node> nodes;
+    private List<Edge> edges;
+    private List<BPMNError> errorList;
+    private LinkedHashMap<String, List<Node>> scopeNodes;
+
+
+    public BPMNChecker(MermaidParser parser) {
+        this.nodes = parser.getNodes();
+        this.edges = parser.getEdges();
+        this.errorList = new ArrayList<>();
+        //this.scopeNodes = new LinkedHashMap<>();
+
+        for (Node node : nodes.values()) {
+            List<Edge> out = new ArrayList<>();
+            List<Edge> in = new ArrayList<>();
+            List<Role> roles = new ArrayList<>();
+            for (Edge edge : edges) {
+                // TODO: sourceKey
+                if (Objects.equals(edge.getSourceKey(), node.getKey())) {
+                    out.add(edge);
+                }
+                if (Objects.equals(edge.getTargetKey(), node.getKey())) {
+                    in.add(edge);
+                }
+            }
+            node.setOutgoingEdges(out);
+            node.setIncomingEdges(in);
+            if (node.getIncomingEdges().size() > 1) {
+                roles.add(Role.MERGE);
+            }
+            if (node.getOutgoingEdges().size() > 1) {
+                roles.add(Role.SPLIT);
+            }
+            node.setRoles(roles);
+        }
+        this.scopeNodes = new LinkedHashMap<>();
+        for (Node node : nodes.values()) {
+            String nodeScope = this.getScope(node);
+            if (!scopeNodes.containsKey(nodeScope)) {
+                List<Node> temp = new ArrayList<>();
+                temp.add(node);
+                scopeNodes.put(nodeScope, temp);
+            } else {
+                scopeNodes.get(nodeScope).add(node);
+            }
+        }
+    }
+
+    // TODO: 29 + 2 pre-defined error classification
+
+    public void detectErrors() {
+        // TODO: test all errors, if detected, add to errorList
+        // CON
+        this.conIsolatedNode();
+        this.conMissingIncomingSequenceFlow();
+        this.conMissingOutgoingSequenceFlow();
+        this.conUnreachableActivity();
+        this.conEndeventUnreachableFromStart();
+        // SE
+        this.seMissingStart();
+        this.seMissingEnd();
+        this.seMultipleStart();
+        this.seMultipleEnd();
+        this.seStartWithIncoming();
+        this.seEndWithOutgoing();
+        // GTW
+        this.gtwImplicitSplit();
+        this.gtwImplicitJoin();
+        this.gtwMismatched();
+        this.gtwNestingViolation();
+        // XOR
+        this.xorMultipleRoles();
+        this.xorMissingCondition();
+        this.xorRedundant();
+        // AND
+        this.andMultipleRoles();
+        this.andRedundant();
+        this.andMismatch();
+        // OR
+        this.orMultipleRoles();
+        this.orMissingCondition();
+        this.orRedundant();
+    }
+
+    private String getScope(Node node) {
+        String scope;
+        if (node.getLocation() == null) {
+            // to distinguish real main Process and subprocess with name Main
+            scope = "Main:[]";
+        } else {
+            scope = "Subprocess:[" + node.getLocation() + "]";
+        }
+        return scope;
+    }
+
+    // CON
+    public void conIsolatedNode() {
+        // no in no out
+        for (Node node : nodes.values()) {
+            List<Node> errorNodes = new ArrayList<>();
+            List<Edge> errorEdges = new ArrayList<>();
+            // 缺少in和out,孤立节点
+            // there is no need to distinguish the scope
+            if (node.getIncomingEdges().isEmpty() && node.getOutgoingEdges().isEmpty()) {
+                errorNodes.add(node);
+                // public BPMNError(String errorId, String errorName, String errorCategory, String scope, String message, List<Edge> edges)
+                BPMNError error = new BPMNError("CON-01", "Isolated Node",
+                        "Connectivity and Reachability", this.getScope(node),
+                        "", errorNodes, errorEdges, Severity.ERROR);
+                errorList.add(error);
+            }
+        }
+    }
+
+//    private boolean isInAdHocBox() {
+//        // Possibility 1:
+//         // only accept pure "task" processes
+//        // Possibility 2:
+//
+//        // if adhoc subprocess is necessary, then fulfill this part
+//        return false;
+//    }
+
+    public void conMissingIncomingSequenceFlow() {
+        // TODO ad hoc box maybe need to be considered or ignore
+        for (Node node : nodes.values()) {
+            if (node.getIncomingEdges().isEmpty() && !node.getOutgoingEdges().isEmpty()
+                    && node.getType() != NodeType.STARTEVENT) {
+
+                List<Node> errorNodes = new ArrayList<>();
+                List<Edge> errorEdges = new ArrayList<>();
+
+                String scope = this.getScope(node);
+                errorNodes.add(node);
+
+                // public BPMNError(String errorId, String errorName, String errorCategory, String scope, String message, List<Edge> edges)
+                BPMNError error = new BPMNError("CON-02", "Missing Incoming Sequence Flow",
+                        "Connectivity and Reachability", scope, "",
+                        errorNodes, errorEdges, Severity.ERROR);
+                errorList.add(error);
+            }
+        }
+    }
+
+    public void conMissingOutgoingSequenceFlow() {
+        for (Node node : nodes.values()) {
+            if (!node.getIncomingEdges().isEmpty() && node.getOutgoingEdges().isEmpty()
+                    && node.getType() != NodeType.ENDEVENT) {
+
+                List<Node> errorNodes = new ArrayList<>();
+                List<Edge> errorEdges = new ArrayList<>();
+
+                String scope = this.getScope(node);
+                errorNodes.add(node);
+
+                // public BPMNError(String errorId, String errorName, String errorCategory, String scope, String message, List<Edge> edges)
+                BPMNError error = new BPMNError("CON-03", "Missing Outgoing Sequence Flow",
+                        "Connectivity and Reachability", scope, "",
+                        errorNodes, errorEdges, Severity.ERROR);
+                errorList.add(error);
+            }
+        }
+    }
+
+    // scope matters
+    public void conUnreachableActivity() {
+        // LinkedHashMap<String, List<Node>> scopeNodes = this.getNodesByScope();
+
+        for (List<Node> nodeList : scopeNodes.values()) {
+            Set<Node> reachable = this.reachableInScope(nodeList);
+            List<Node> unreachable = nodeList.stream().filter(node -> !reachable.contains(node)).toList();
+            for (Node errorNode : unreachable) {
+                List<Node> errorNodes = new ArrayList<>();
+                errorNodes.add(errorNode);
+                List<Edge> errorEdges = new ArrayList<>();
+                String scope = this.getScope(errorNode);
+                BPMNError error = new BPMNError("CON-04", "Unreachable Activity",
+                        "Connectivity and Reachability", scope, "",
+                        errorNodes, errorEdges, Severity.ERROR);
+                errorList.add(error);
+            }
+
+        }
+        // TODO BFS
+    }
+
+//    // separate nodes by scope
+//    private LinkedHashMap<String, List<Node>> getNodesByScope() {
+//        LinkedHashMap<String, List<Node>> scopeNodes = new LinkedHashMap<>();
+//        // random subprocess --> Subprocess:[subId]
+//        // main process --> Main:[]
+//        for (Node node : nodes.values()) {
+//            String nodeScope = this.getScope(node);
+//            if (!scopeNodes.containsKey(nodeScope)) {
+//                List<Node> temp = new ArrayList<>();
+//                temp.add(node);
+//                scopeNodes.put(nodeScope, temp);
+//            } else {
+//                scopeNodes.get(nodeScope).add(node);
+//            }
+//        }
+//        return scopeNodes;
+//    }
+
+    private Set<Node> reachableInScope(List<Node> partNodes) {
+        // check whether a node is reachable from the start in this scope
+
+        List<Edge> edgesInScope = new ArrayList<>();
+        Set<Node> reachable = new HashSet<>();
+        Set<String> keys = new HashSet<>();
+
+        for (Node n : partNodes) {
+            keys.add(n.getKey());
+        }
+
+        for (Edge edge : edges) {
+            if (keys.contains(edge.getSourceKey()) && keys.contains(edge.getTargetKey())) {
+                edgesInScope.add(edge);
+            }
+        }
+
+        // first node can be NOT start event
+        // if theres no start event return empty set
+        for (Node start : partNodes) {
+            if (start.getType() == NodeType.STARTEVENT) {
+                reachable.add(start);
+                reachable.addAll(this.getArrival(partNodes, edgesInScope, start));
+            }
+        }
+
+        // return all reachable node in this scope
+        // what if there's no start event?
+        return reachable;
+    }
+
+    private List<Node> getArrival(List<Node> scopeNodes, List<Edge> relatedEdges, Node start) {
+        // fifo, add and poll
+        List<Node> arrivals = new ArrayList<>();
+        Deque<Node> q = new ArrayDeque<>();
+        // set doenst allow same
+        Set<String> visited = new HashSet<>();
+        q.add(start);
+        visited.add(start.getKey());
+
+        while (!q.isEmpty()) {
+            Node current = q.poll();
+            for (Edge edge : current.getOutgoingEdges()) {
+                if (relatedEdges.contains(edge)) {
+                    for (Node target : scopeNodes) {
+                        if (target.getKey().equals(edge.getTargetKey()) && visited.add(target.getKey())) {
+                            q.add(target);
+                            arrivals.add(target);
+                        }
+                    }
+                }
+
+            }
+        }
+        return arrivals;
+    }
+
+
+    public void conEndeventUnreachableFromStart() {
+        // TODO BFS and whether there is endevent? --> SE02
+        // LinkedHashMap<String, List<Node>> scopeNodes = this.getNodesByScope();
+        for (List<Node> nodeList : scopeNodes.values()) {
+            Set<Node> reachable = this.reachableInScope(nodeList);
+            for (Node node : nodeList) {
+                if (node.getType() == NodeType.ENDEVENT && !reachable.contains(node)) {
+                    List<Node> errorNodes = new ArrayList<>();
+                    errorNodes.add(node);
+                    List<Edge> errorEdges = new ArrayList<>();
+                    String scope = this.getScope(node);
+                    BPMNError error = new BPMNError("CON-05", "End Event Unreachable from Start",
+                            "Connectivity and Reachability", scope, "",
+                            errorNodes, errorEdges, Severity.ERROR);
+                    errorList.add(error);
+                }
+            }
+        }
+    }
+
+    // SE
+    // TODO need to consider main process and subprocesses
+    public void seMissingStart() {
+
+        for (List<Node> nodeList : scopeNodes.values()) {
+            List<Node> errorNodes = new ArrayList<>();
+            List<Edge> errorEdges = new ArrayList<>();
+            String scope = this.getScope(nodeList.get(0));
+            boolean startExist = false;
+            for (Node node : nodeList) {
+                if (node.getType() == NodeType.STARTEVENT) {
+                    startExist = true;
+                    break;
+                }
+            }
+            if (!startExist) {
+                BPMNError error = new BPMNError("SE-01", "Missing Start Event", "Start & End Event Errors",
+                        scope, "", errorNodes, errorEdges, Severity.ERROR);
+                errorList.add(error);
+            }
+        }
+    }
+
+    public void seMissingEnd() {
+        for (List<Node> nodeList : scopeNodes.values()) {
+            List<Node> errorNodes = new ArrayList<>();
+            List<Edge> errorEdges = new ArrayList<>();
+            String scope = this.getScope(nodeList.get(0));
+            boolean endExist = false;
+            for (Node node : nodeList) {
+                if (node.getType() == NodeType.ENDEVENT) {
+                    endExist = true;
+                    break;
+                }
+            }
+            if (!endExist) {
+                BPMNError error = new BPMNError("SE-02", "Missing End Event", "Start & End Event Errors",
+                        scope, "", errorNodes, errorEdges, Severity.ERROR);
+                errorList.add(error);
+            }
+        }
+    }
+
+    public void seMultipleStart() {
+        // TODO: scope
+
+        for (List<Node> nodeList : scopeNodes.values()) {
+            List<Edge> errorEdges = new ArrayList<>();
+            String scope = this.getScope(nodeList.get(0));
+            int startNum = 0;
+            List<Node> starts = new ArrayList<>();
+            for (Node node : nodeList) {
+                if (node.getType() == NodeType.STARTEVENT) {
+                    startNum ++;
+                    starts.add(node);
+                }
+            }
+            if (startNum > 1) {
+                // List<Node> errorNodes = new ArrayList<>(starts);
+                BPMNError error = new BPMNError("SE-03", "Multiple Start Events", "Start & End Event Errors",
+                        scope, "", starts, errorEdges, Severity.WARNING);
+                errorList.add(error);
+            }
+        }
+    }
+
+    public void seMultipleEnd() {
+        for (List<Node> nodeList : scopeNodes.values()) {
+            // List<Node> errorNodes = new ArrayList<>();
+            List<Edge> errorEdges = new ArrayList<>();
+            String scope = this.getScope(nodeList.get(0));
+            int endNum = 0;
+            List<Node> ends = new ArrayList<>();
+            for (Node node : nodeList) {
+                if (node.getType() == NodeType.ENDEVENT) {
+                    endNum ++;
+                    ends.add(node);
+                }
+            }
+            if (endNum > 1) {
+                // List<Node> errorNodes = new ArrayList<>(ends);
+                BPMNError error = new BPMNError("SE-04", "Multiple End Events", "Start & End Event Errors",
+                        scope, "", ends, errorEdges, Severity.WARNING);
+                errorList.add(error);
+
+            }
+        }
+
+    }
+
+    public void seStartWithIncoming() {
+        for (Node node : nodes.values()) {
+            List<Node> errorNodes = new ArrayList<>();
+            String scope = this.getScope(node);
+            if (node.getType() == NodeType.STARTEVENT && !node.getIncomingEdges().isEmpty()) {
+                errorNodes.add(node);
+                List<Edge> errorEdges = new ArrayList<>(node.getIncomingEdges());
+                BPMNError error = new BPMNError("SE-05", "Start Event with Incoming Sequence Flow", "Start & End Event Errors",
+                        scope, "", errorNodes, errorEdges, Severity.ERROR);
+                errorList.add(error);
+            }
+        }
+    }
+
+    public void seEndWithOutgoing() {
+        for (Node node : nodes.values()) {
+            List<Node> errorNodes = new ArrayList<>();
+            String scope = this.getScope(node);
+            if (node.getType() == NodeType.ENDEVENT && !node.getOutgoingEdges().isEmpty()) {
+                errorNodes.add(node);
+                List<Edge> errorEdges = new ArrayList<>(node.getOutgoingEdges());
+                BPMNError error = new BPMNError("SE-06", "End Event with Outgoing Sequence Flow", "Start & End Event Errors",
+                        scope, "", errorNodes, errorEdges, Severity.ERROR);
+                errorList.add(error);
+            }
+        }
+    }
+
+    // GTW
+    public void gtwImplicitSplit() {
+        for (Node node : nodes.values()) {
+            if (!node.isGateway() && this.isSplit(node)) {
+                List<Node> errorNodes = new ArrayList<>();
+                errorNodes.add(node);
+                List<Edge> errorEdges = new ArrayList<>(node.getOutgoingEdges());
+                String scope = this.getScope(node);
+                BPMNError error = new BPMNError("GTW-01", "Implicit Split", "General Gateway Errors",
+                        scope, "", errorNodes, errorEdges, Severity.WARNING);
+                errorList.add(error);
+            }
+        }
+    }
+
+    public void gtwImplicitJoin() {
+        for (Node node : nodes.values()) {
+            if (!node.isGateway() && this.isMerge(node)) {
+                List<Node> errorNodes = new ArrayList<>();
+                errorNodes.add(node);
+                List<Edge> errorEdges = new ArrayList<>(node.getIncomingEdges());
+                String scope = this.getScope(node);
+                BPMNError error = new BPMNError("GTW-02", "Implicit Join", "General Gateway Errors",
+                        scope, "", errorNodes, errorEdges, Severity.WARNING);
+                errorList.add(error);
+            }
+        }
+    }
+
+    public void gtwMismatched() {
+        // TODO
+        for (List<Node> nodeList : scopeNodes.values()) {
+            Set<Edge> loopEdges = this.getDAG(nodeList);
+
+            for (Node node : nodeList) {
+                if (!node.isGateway() || !this.isSplit(node, loopEdges)) {
+                    continue;
+                }
+
+                JoinMatch match = this.strictMatchingJoin(node, loopEdges);
+                if (match == null) {
+                    continue;
+                }
+
+                Node join  = match.join;
+                if (!join.isGateway() || join.getType() == node.getType()) {
+                    continue;
+                }
+
+                List<Node> errorNodes = new ArrayList<>();
+                errorNodes.add(node);
+                errorNodes.add(join);
+                List<Edge> errorEdges = new ArrayList<>();
+                String scope = this.getScope(node);
+                BPMNError error = new BPMNError("GTW-03", "Mismatched Gateway Types", "General Gateway Errors",
+                        scope, "", errorNodes, errorEdges, Severity.ERROR);
+                this.errorList.add(error);
+
+            }
+        }
+    }
+
+    private Set<Edge> getDAG(List<Node> nodeList) {
+        Set<String> keys = new HashSet<>();
+        for (Node node : nodeList) {
+            keys.add(node.getKey());
+        }
+
+        Set<String> black = new HashSet<>();
+        Set<String> grey = new HashSet<>();
+
+        Set<Edge> loopEdge = new HashSet<>();
+
+        for (Node node : nodeList) {
+            if (!black.contains(node.getKey())) {
+                this.getLoopEdge(node, keys, black, grey, loopEdge);
+            }
+        }
+        return loopEdge;
+    }
+
+    private void getLoopEdge(Node node, Set<String> keys, Set<String> black, Set<String> grey, Set<Edge> loopEdges) {
+        black.add(node.getKey());
+        grey.add(node.getKey());
+
+        for (Edge edge: node.getOutgoingEdges()) {
+            String key = edge.getTargetKey();
+            Node target = this.nodes.get(key);
+
+            if (target == null || !keys.contains(target.getKey())) {
+                continue;
+            }
+
+            if (grey.contains(target.getKey())) {
+                loopEdges.add(edge);
+                continue;
+            }
+
+            if (!black.contains(target.getKey())) {
+                this.getLoopEdge(target, keys, black, grey, loopEdges);
+            }
+        }
+        grey.remove(node.getKey());
+    }
+
+//    // check loops
+//    private boolean hasCycle(List<Node> nodeList) {
+//        // white, original keys
+//        Set<String> keys = new HashSet<>();
+//
+//        for (Node node : nodeList) {
+//            keys.add(node.getKey());
+//        }
+//
+//        // for dfs
+//        Set<String> black = new HashSet<>();
+//        Set<String> grey = new HashSet<>();
+//
+//        for (Node n : nodeList) {
+//            if (!black.contains(n.getKey()) && this.cycleHelper(n, keys, black, grey)) {
+//                return true;
+//            }
+//        }
+//        return false;
+//    }
+//
+//    private boolean cycleHelper(Node node, Set<String> keys, Set<String> black, Set<String> grey) {
+//        black.add(node.getKey());
+//        grey.add(node.getKey());
+//
+//        for (Edge edge : node.getOutgoingEdges()) {
+//            String key = edge.getTargetKey();
+//            Node target = this.nodes.get(key);
+//
+//            if (target == null || !keys.contains(target.getKey())) {
+//                continue;
+//            }
+//
+//            // meet grey: cycle
+//            if (grey.contains(target.getKey())) {
+//                return true;
+//            }
+//
+//            if (!black.contains(target.getKey()) && cycleHelper(target, keys, black, grey)) {
+//                return true;
+//            }
+//
+//        }
+//        grey.remove(node.getKey());
+//        return false;
+//    }
+
+    private Node branchJoin(Node branchStart, String scope, Set<Edge> loopEdges) {
+        int balance  = 0;
+        Node current = branchStart;
+        Set<String> arrival = new HashSet<>();
+
+        while (current != null && arrival.add(current.getKey())) {
+
+            // TODO mergeGateway/splitGateway/normalNode
+
+            if (this.isMerge(current, loopEdges)) {
+                if (balance == 0) {
+                    return current;
+                } else {
+                    balance--;
+                }
+            }
+
+            if (this.isSplit(current, loopEdges)) {
+                balance++;
+            }
+
+            // only deal with edges not in loopEdges
+            Edge nextEdge = null;
+            for (Edge edge : current.getOutgoingEdges()) {
+                if (!loopEdges.contains(edge)) {
+                    nextEdge = edge;
+                    break;
+                }
+            }
+
+            if (nextEdge == null) {
+                return null;
+            }
+
+//            if (current.getOutgoingEdges().isEmpty()) {
+//                return null;
+//            }
+
+            String key = nextEdge.getTargetKey();
+            Node next = this.nodes.get(key);
+
+            // 保证在同一scope中
+            if (next == null || !this.getScope(next).equals(scope)) {
+                return null;
+            }
+
+            current = next;
+
+        }
+        return null;
+    }
+
+    private static class JoinMatch {
+        private Node join;
+        private int branchCount;
+        private int merged;
+
+    }
+
+
+    private JoinMatch strictMatchingJoin(Node split, Set<Edge> loopEdges) {
+        String scope = this.getScope(split);
+        Node target = null;
+        // branch number --> AND
+        int reachedCount = 0;
+        int branchCount = 0;
+
+        for (Edge edge : split.getOutgoingEdges()) {
+
+            if (loopEdges.contains(edge)) {
+                continue;
+            }
+
+            branchCount++;
+
+            Node start = nodes.get(edge.getTargetKey());
+            Node joinNode;
+            if (start == null) {
+                joinNode = null;
+            } else {
+                joinNode = this.branchJoin(start, scope, loopEdges);
+            }
+            // Node joinNode = this.branchJoin(start, scope);
+
+            if (joinNode == null) {
+                continue;
+            }
+
+            if (target == null) {
+                target = joinNode;
+                reachedCount = 1;
+            } else if (target.getKey().equals(joinNode.getKey())) {
+                reachedCount++;
+            } else {
+                return null;
+            }
+        }
+
+        if (target == null) {
+            return null;
+        }
+
+        JoinMatch joinMatch = new JoinMatch();
+        joinMatch.branchCount = branchCount;
+        joinMatch.merged = reachedCount;
+        joinMatch.join = target;
+        return joinMatch;
+    }
+
+
+
+    public void gtwNestingViolation() {
+        // TODO
+        for (List<Node> nodeList : this.scopeNodes.values()) {
+            Set<Edge> loopEdges = this.getDAG(nodeList);
+            String scope = this.getScope(nodeList.get(0));
+
+            for (Node node : nodeList) {
+                // find split gateway first
+                if (node.isGateway() && this.isSplit(node, loopEdges)) {
+                    Set<String> joinKeys = new HashSet<>();
+                    List<Node> joinNodes = new ArrayList<>();
+
+                    for (Edge edge : node.getOutgoingEdges()) {
+                        if (loopEdges.contains(edge)) {
+                            continue;
+                        }
+
+                        Node start = this.nodes.get(edge.getTargetKey());
+                        Node join = null;
+
+                        if (start != null) {
+                            join = this.branchJoin(start, scope, loopEdges);
+                        }
+
+                        if (join != null && joinKeys.add(join.getKey())) {
+                            joinNodes.add(join);
+                        }
+
+                    }
+
+                    // different branches merged at more than one gateway
+                    if (joinKeys.size() > 1) {
+                        List<Node> errorNodes = new ArrayList<>();
+                        errorNodes.add(node);
+                        errorNodes.addAll(joinNodes);
+                        List<Edge> errorEdges = new ArrayList<>();
+
+                        BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation",
+                                "General Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+                        errorList.add(error);
+                    }
+                }
+            }
+
+        }
+    }
+
+    // XOR
+    public void xorMultipleRoles() {
+        for (Node node : nodes.values()) {
+            if (node.getType() == NodeType.EXCLUSIVEGATEWAY && node.getIncomingEdges().size() > 1 && node.getOutgoingEdges().size() > 1) {
+                String scope = this.getScope(node);
+                List<Node> errorNodes = new ArrayList<>();
+                List<Edge> errorEdges = new ArrayList<>();
+                errorNodes.add(node);
+
+                BPMNError error = new BPMNError("XOR-01", "XOR Gateway Used as Both Split and Join",
+                        "XOR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+                errorList.add(error);
+            }
+        }
+
+    }
+
+    public void xorMissingCondition() {
+        for (Node node : nodes.values()) {
+            if (node.getType() == NodeType.EXCLUSIVEGATEWAY) {
+                String scope = this.getScope(node);
+                List<Node> errorNode = new ArrayList<>();
+                List<Edge> without = new ArrayList<>();
+                int conditionNum = 0;
+                // List<Edge> invalid = new ArrayList<>();
+                for (Edge edge : node.getOutgoingEdges()) {
+                    if (edge.getCondition() != null && !edge.getCondition().isEmpty()) {
+                        conditionNum++;
+                    } else {
+                        without.add(edge);
+                    }
+                }
+                if (conditionNum < node.getOutgoingEdges().size() - 1) {
+                    errorNode.add(node);
+                    List<Edge> errorEdge = new ArrayList<>(without);
+                    BPMNError error = new BPMNError("XOR-02", "Missing Condition on XOR Outgoing Flow",
+                            "XOR Gateway Errors", scope, "", errorNode, errorEdge, Severity.ERROR);
+                    errorList.add(error);
+                }
+            }
+        }
+    }
+
+    public void xorRedundant() {
+        for (Node node : nodes.values()) {
+
+            List<Node> errorNodes = new ArrayList<>();
+            List<Edge> errorEdges = new ArrayList<>();
+            String scope = this.getScope(node);
+
+            if (node.getType() == NodeType.EXCLUSIVEGATEWAY &&
+                    node.getIncomingEdges().size() == 1 && node.getOutgoingEdges().size() == 1) {
+                errorNodes.add(node);
+
+                BPMNError error = new BPMNError("XOR-03", "Redundant XOR Gateway",
+                        "XOR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+                errorList.add(error);
+            }
+        }
+    }
+
+    // AND
+    public void andMultipleRoles() {
+        for (Node node : nodes.values()) {
+            if (node.getType() == NodeType.PARALLELGATEWAY && node.getIncomingEdges().size() > 1
+                    && node.getOutgoingEdges().size() > 1) {
+                String scope = this.getScope(node);
+                List<Node> errorNodes = new ArrayList<>();
+                List<Edge> errorEdges = new ArrayList<>();
+
+                errorNodes.add(node);
+
+                BPMNError error = new BPMNError("AND-01", "AND Gateway Used as Both Split and Join",
+                        "AND Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+                errorList.add(error);
+            }
+        }
+    }
+
+    public void andRedundant() {
+
+
+        for (Node node : nodes.values()) {
+
+            List<Node> errorNodes = new ArrayList<>();
+            List<Edge> errorEdges = new ArrayList<>();
+            String scope = this.getScope(node);
+
+            if (node.getType() == NodeType.PARALLELGATEWAY && node.getIncomingEdges().size() == 1
+                    && node.getOutgoingEdges().size() == 1) {
+                errorNodes.add(node);
+
+                BPMNError error = new BPMNError("AND-02", "Redundant AND Gateway",
+                        "AND Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+                errorList.add(error);
+            }
+        }
+    }
+
+    public void andMismatch() {
+        // TODO
+
+        for (List<Node> nodeList : this.scopeNodes.values()) {
+            Set<Edge> loopEdges = this.getDAG(nodeList);
+            String scope = this.getScope(nodeList.get(0));
+
+            for (Node node : nodeList) {
+                if (node.getType() != NodeType.PARALLELGATEWAY || !this.isSplit(node, loopEdges)) {
+                    continue;
+                }
+
+                int branchCount = 0;
+                LinkedHashMap<Node, Integer> reached = new LinkedHashMap<>();
+
+                for (Edge edge : node.getOutgoingEdges()) {
+                    if (loopEdges.contains(edge)) {
+                        continue;
+                    }
+                    branchCount++;
+
+                    Node start = this.nodes.get(edge.getTargetKey());
+                    Node join;
+                    if (start == null) {
+                        join = null;
+                    } else {
+                        join = this.branchJoin(start, scope, loopEdges);
+                    }
+
+                    if (join != null) {
+                        Integer num  = reached.get(join);
+                        int a;
+                        if (num == null) {
+                            a = 1;
+                        } else {
+                            a = num + 1;
+                        }
+                        reached.put(join, a);
+                    }
+
+                }
+
+                // all and split gateway endlich merged at only one node(and node)
+                if (reached.size() == 1) {
+                    Node join = reached.keySet().iterator().next();
+                    int hit = reached.get(join);
+
+                    // not parallel --> ignore
+                    // and-03 not responsible for this situation
+                    if (join.getType() != NodeType.PARALLELGATEWAY) {
+                        continue;
+                    }
+
+                    // no problem
+                    if (hit == branchCount && this.getIncomingWithoutLoop(join, loopEdges) == branchCount) {
+                        continue;
+                    }
+
+                }
+
+                List<Node> errorNodes = new ArrayList<>();
+                errorNodes.add(node);
+                errorNodes.addAll(reached.keySet());
+
+                List<Edge> errorEdges = new ArrayList<>();
+                BPMNError error = new BPMNError("AND-03", "AND Split and Join Branch Count Mismatch",
+                        "AND Gateway Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
+                errorList.add(error);
+            }
+        }
+
+
+
+    }
+
+    private int getIncomingWithoutLoop(Node node, Set<Edge> loopEdges) {
+        int incoming = 0;
+        for (Edge edge : node.getIncomingEdges()) {
+            if (!loopEdges.contains(edge)) {
+                incoming++;
+            }
+        }
+        return incoming;
+    }
+
+    // OR
+    public void orMultipleRoles() {
+
+        for (Node node : nodes.values()) {
+
+            if (node.getType() == NodeType.INCLUSIVEGATEWAY && node.getIncomingEdges().size() > 1 && node.getOutgoingEdges().size() > 1) {
+
+                String scope = this.getScope(node);
+                List<Node> errorNodes = new ArrayList<>();
+                errorNodes.add(node);
+                // errorNodes.addAll(reached.keySet());
+
+                List<Edge> errorEdges = new ArrayList<>();
+
+                BPMNError error = new BPMNError("OR-01", "OR Gateway Used as Both Split and Join",
+                        "OR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+                errorList.add(error);
+            }
+        }
+    }
+
+    public void orMissingCondition() {
+        for (Node node : nodes.values()) {
+            if (node.getType() == NodeType.INCLUSIVEGATEWAY) {
+                int conditionNum = 0;
+                List<Edge> without = new ArrayList<>();
+
+                // List<Edge> invalid = new ArrayList<>();
+                for (Edge edge : node.getOutgoingEdges()) {
+                    if (edge.getCondition() != null && !edge.getCondition().isEmpty()) {
+                        conditionNum++;
+                    } else {
+                        without.add(edge);
+                    }
+                }
+                if (conditionNum < node.getOutgoingEdges().size() - 1) {
+
+                    String scope = this.getScope(node);
+                    List<Node> errorNodes = new ArrayList<>();
+                    errorNodes.add(node);
+                    // errorNodes.addAll(reached.keySet());
+                    List<Edge> errorEdges = new ArrayList<>(without);
+
+
+                    BPMNError error = new BPMNError("OR-02", "Missing Condition on OR Outgoing Flow",
+                            "OR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
+                    errorList.add(error);
+                }
+            }
+        }
+    }
+
+    public void orRedundant() {
+        for (Node node : nodes.values()) {
+            if (node.getType() == NodeType.INCLUSIVEGATEWAY && node.getIncomingEdges().size() == 1 && node.getOutgoingEdges().size() == 1) {
+
+                String scope = this.getScope(node);
+                List<Node> errorNodes = new ArrayList<>();
+                errorNodes.add(node);
+                List<Edge> errorEdges = new ArrayList<>();
+
+                BPMNError error = new BPMNError("OR-03", "Redundant OR Gateway",
+                        "OR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+                errorList.add(error);
+            }
+        }
+    }
+
+    // SUB
+    public void subEmptySubprocess() {
+        for (Node node : nodes.values()) {
+            if (node.getType() == NodeType.SUBPROCESS) {
+                String subId = node.getId();
+
+                boolean exist = false;
+
+                for (Node n : nodes.values()) {
+                    if (n.getLocation().equals(subId)) {
+                        exist = true;
+                        break;
+                    }
+                }
+
+                if (!exist) {
+                    List<Node> errorNodes = new ArrayList<>();
+                    errorNodes.add(node);
+                    List<Edge> errorEdges = new ArrayList<>();
+                    String scope = this.getScope(node);
+                    BPMNError error = new BPMNError("SUB-01", "Empty Subprocess",
+                            "Subprocess Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
+                    errorList.add(error);
+                }
+            }
+        }
+    }
+
+    public void subBoundaryViolation() {
+        for (Edge edge : edges) {
+            Node source = nodes.get(edge.getSourceKey());
+            Node target = nodes.get(edge.getTargetKey());
+
+            if (!Objects.equals(source.getLocation(), target.getLocation())) {
+                List<Node> errorNodes = new ArrayList<>();
+                // TODO scope can also be list or just keep only add source
+                String scope = this.getScope(source);
+                errorNodes.add(source);
+                errorNodes.add(target);
+
+                List<Edge> errorEdges = new ArrayList<>();
+                errorEdges.add(edge);
+
+                BPMNError error = new BPMNError("SUB-02", "Subprocess Boundary Violation",
+                        "Subprocess Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
+            }
+        }
+    }
+
+    // currently we dont consider adhoc box
+//    public BPMNError subIllegalElement() {
+//        return null;
+//    }
+
+    // LBL
+    public void  lblDuplicateName() {
+        // label nodes with same label
+        LinkedHashMap<String, List<Node>> labelNodes = new LinkedHashMap<>();
+
+        for (Node node : nodes.values()) {
+            if (node.getType() == NodeType.TASK) {
+                String label = node.getLabel();
+                if (label != null && !label.isEmpty() && !label.isBlank()) {
+                    if (!labelNodes.containsKey(label)) {
+                        List<Node> nodeList = new ArrayList<>();
+                        nodeList.add(node);
+                        labelNodes.put(label, nodeList);
+                    } else {
+                        labelNodes.get(label).add(node);
+                    }
+                }
+
+            }
+
+        }
+
+        for (List<Node> ln : labelNodes.values()) {
+            if (ln.size() > 1) {
+                List<Node> errorNodes = new ArrayList<>(ln);
+                List<Edge> errorEdges = new ArrayList<>();
+
+                // cant define scope and we dont really need them
+                BPMNError error = new BPMNError("LBL-01", "Duplicate Activity Name",
+                        "Label Errors", "global", "", errorNodes, errorEdges, Severity.WARNING);
+                errorList.add(error);
+            }
+        }
+    }
+
+    // EDGE
+    public void edgeDuplicateFlow() {
+        LinkedHashMap<EdgePair, List<Edge>> sameEdge = new LinkedHashMap<>();
+
+        for (Edge edge : edges) {
+            EdgePair e = new EdgePair();
+            e.source = nodes.get(edge.getSourceKey());
+            e.target = nodes.get(edge.getTargetKey());
+            if (!sameEdge.containsKey(e)) {
+                List<Edge> edgeList = new ArrayList<>();
+                edgeList.add(edge);
+                sameEdge.put(e, edgeList);
+            } else {
+                sameEdge.get(e).add(edge);
+            }
+        }
+
+        for (EdgePair se : sameEdge.keySet()) {
+            if (sameEdge.get(se).size() > 1) {
+                List<Node> errorNodes = new ArrayList<>();
+                List<Edge> errorEdges = new ArrayList<>(sameEdge.get(se));
+
+                if (se.source != null) {
+                    errorNodes.add(se.source);
+                }
+
+                if (se.target != null) {
+                    errorNodes.add(se.target);
+                }
+
+                String scope;
+                if (se.source != null) {
+                    scope = this.getScope(se.source);
+                } else {
+                    scope = "There exist other errors!";
+                }
+
+
+                // cant define scope and we dont really need them
+                BPMNError error = new BPMNError("EDGE-01", "Duplicate Sequence Flow",
+                        "Edge Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+                errorList.add(error);
+            }
+        }
+    }
+
+    private static class EdgePair {
+        Node source;
+        Node target;
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            EdgePair edgePair = (EdgePair) o;
+            return Objects.equals(source, edgePair.source) && Objects.equals(target, edgePair.target);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(source, target);
+        }
+    }
+
+    // LOOP
+    public void loopDeadlock() {
+        // in a loop, it cant arrive at end event of this scope
+        for (List<Node> nodeList : scopeNodes.values()) {
+            boolean hasEndevent = false;
+            for (Node n : nodeList) {
+                if (n.getType() == NodeType.ENDEVENT) {
+                    hasEndevent = true;
+                    break;
+                }
+            }
+
+            if (hasEndevent) {
+                Set<Edge> loopEdges = this.getDAG(nodeList);
+
+                if (!loopEdges.isEmpty()) {
+                    Set<String> keys = new HashSet<>();
+                    for (Node n : nodeList) {
+                        keys.add(n.getKey());
+                    }
+
+                    List<Edge> edgesInScope = new ArrayList<>();
+                    for (Edge edge : edges) {
+                        if (keys.contains(edge.getSourceKey()) && keys.contains(edge.getTargetKey())) {
+                            edgesInScope.add(edge);
+                        }
+                    }
+
+                    String scope = this.getScope(nodeList.get(0));
+
+                    Set<String> result = new HashSet<>();
+
+                    for (Edge loop : loopEdges) {
+                        Node enterNode = nodes.get(loop.getTargetKey());
+                        if (enterNode != null && !result.contains(enterNode.getKey())) {
+                            List<Node> reachable = this.getArrival(nodeList, edgesInScope, enterNode);
+                            boolean canReachEnd = false;
+
+                            for (Node n : reachable) {
+                                if (n.getType() == NodeType.ENDEVENT) {
+                                    canReachEnd = true;
+                                    break;
+                                }
+                            }
+
+                            if (!canReachEnd) {
+                                result.add(enterNode.getKey());
+                                List<Node> errorNodes = new ArrayList<>();
+                                errorNodes.add(enterNode);
+
+                                List<Edge> errorEdges = new ArrayList<>();
+                                errorEdges.add(loop);
+
+                                BPMNError error = new BPMNError("LOOP-01", "Deadlock",
+                                        "Loop Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
+                                errorList.add(error);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // and cant be as loop control gateway
+    public void loopInvalidGateway() {
+        for (List<Node> nodeList : scopeNodes.values()) {
+            Set<Edge> loopEdges = this.getDAG(nodeList);
+            String scope = this.getScope(nodeList.get(0));
+
+            for (Edge edge : loopEdges) {
+                Node exitLoop = nodes.get(edge.getSourceKey());
+                Node enterLoop = nodes.get(edge.getTargetKey());
+
+                boolean and = (exitLoop!= null && exitLoop.getType() == NodeType.PARALLELGATEWAY)
+                        || (enterLoop != null && enterLoop.getType() == NodeType.PARALLELGATEWAY);
+
+                if (and) {
+                    List<Node> errorNodes = new ArrayList<>();
+                    if (exitLoop != null) {
+                        errorNodes.add(exitLoop);
+                    }
+
+                    if (enterLoop != null) {
+                        errorNodes.add(enterLoop);
+                    }
+
+                    List<Edge> errorEdges = new ArrayList<>();
+                    // errorEdges.add(edge);
+
+                    BPMNError error = new BPMNError("LOOP-03", "Loop Controlled by AND Gateway",
+                            "Loop Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
+                    errorList.add(error);
+                }
+            }
+        }
+    }
+
+
+    private boolean isSplit(Node node) {
+        return node.getOutgoingEdges().size() > 1;
+    }
+
+    private boolean isSplit(Node node, Set<Edge> loopEdges) {
+        int count = 0;
+        for (Edge edge : node.getOutgoingEdges()) {
+            if (!loopEdges.contains(edge)) {
+                count++;
+            }
+        }
+
+        return count > 1;
+    }
+
+    private boolean isMerge(Node node) {
+        return node.getIncomingEdges().size() > 1;
+    }
+
+    // consider the situation of graph with loop
+    // for gtw0304
+    private boolean isMerge(Node node, Set<Edge> loopEdges) {
+        int count = 0;
+        for (Edge edge : node.getIncomingEdges()) {
+            if (!loopEdges.contains(edge)) {
+                count++;
+            }
+        }
+
+        return count > 1;
+    }
+
+
+
+
+
+
+
+
+    public LinkedHashMap<String, Node> getNodes() {
+        return nodes;
+    }
+
+    public void setNodes(LinkedHashMap<String, Node> nodes) {
+        this.nodes = nodes;
+    }
+
+    public List<Edge> getEdges() {
+        return edges;
+    }
+
+    public void setEdges(List<Edge> edges) {
+        this.edges = edges;
+    }
+
+    public List<BPMNError> getErrorList() {
+        return errorList;
+    }
+
+    public void setErrorList(List<BPMNError> errorList) {
+        this.errorList = errorList;
+    }
+
+    public LinkedHashMap<String, List<Node>> getScopeNodes() {
+        return scopeNodes;
+    }
+
+    public void setScopeNodes(LinkedHashMap<String, List<Node>> scopeNodes) {
+        this.scopeNodes = scopeNodes;
+    }
+}

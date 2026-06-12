@@ -53,4 +53,12 @@ public class BPMNError {
     public List<Edge> getEdges() {
         return edges;
     }
+
+    public List<Node> getNodes() {
+        return nodes;
+    }
+
+    public Severity getSeverity() {
+        return severity;
+    }
 }

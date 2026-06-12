@@ -3,9 +3,6 @@ package org.example.checker;
 import org.example.model.*;
 import org.example.parser.MermaidParser;
 
-import javax.imageio.plugins.tiff.TIFFDirectory;
-import javax.sound.midi.MidiFileFormat;
-import java.security.spec.ECGenParameterSpec;
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -94,6 +91,16 @@ public class BPMNChecker {
         this.orMultipleRoles();
         this.orMissingCondition();
         this.orRedundant();
+        // SUB
+        this.subEmptySubprocess();
+        this.subBoundaryViolation();
+        // LBL
+        this.lblDuplicateName();
+        // EDGE
+        this.edgeDuplicateFlow();
+        // LOOP
+        this.loopDeadlock();
+        this.loopInvalidGateway();
     }
 
     private String getScope(Node node) {
@@ -983,7 +990,7 @@ public class BPMNChecker {
                 boolean exist = false;
 
                 for (Node n : nodes.values()) {
-                    if (n.getLocation().equals(subId)) {
+                    if (subId.equals(n.getLocation())) {
                         exist = true;
                         break;
                     }
@@ -1007,6 +1014,11 @@ public class BPMNChecker {
             Node source = nodes.get(edge.getSourceKey());
             Node target = nodes.get(edge.getTargetKey());
 
+            // situation of source and target should be check
+            if (source == null || target == null) {
+                continue;
+            }
+
             if (!Objects.equals(source.getLocation(), target.getLocation())) {
                 List<Node> errorNodes = new ArrayList<>();
                 // TODO scope can also be list or just keep only add source
@@ -1019,6 +1031,7 @@ public class BPMNChecker {
 
                 BPMNError error = new BPMNError("SUB-02", "Subprocess Boundary Violation",
                         "Subprocess Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
+                this.errorList.add(error);
             }
         }
     }
@@ -1296,4 +1309,6 @@ public class BPMNChecker {
     public void setScopeNodes(LinkedHashMap<String, List<Node>> scopeNodes) {
         this.scopeNodes = scopeNodes;
     }
+
+
 }

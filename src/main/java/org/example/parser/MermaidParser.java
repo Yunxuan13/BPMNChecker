@@ -32,7 +32,7 @@ public class MermaidParser {
         try {
             this.parse(mermaidPath);
         } catch (Exception e) {
-            throw new Exception("There exists errors while reading the file.");
+            throw new Exception("Failed to parse Mermaid file '" + mermaidPath + "': " +e.getMessage());
         }
 
     }
@@ -111,7 +111,7 @@ public class MermaidParser {
 
                 if (subs.isEmpty()) {
                     // TODO: Exception sentence
-                    throw new Exception("");
+                    throw new Exception("Unmatched 'end'");
                 }
                 // end and only end
                 // pop current subprocess
@@ -305,7 +305,7 @@ public class MermaidParser {
             node.setLabel(label);
             String currentLocation = node.getLocation();
             // TODO: consider the situation, a node already be recorded in a mainprocess, but here in "null"
-            if (currentLocation != null && subs.contains(currentLocation)) {
+            if (!subs.isEmpty() && (currentLocation == null || subs.contains(currentLocation))) {
                 node.setLocation(subs.peek());
             }
         } else {

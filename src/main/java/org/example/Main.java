@@ -3,13 +3,12 @@ package org.example;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.example.checker.BPMNChecker;
-import org.example.model.BPMNError;
-import org.example.model.Edge;
-import org.example.model.Node;
-import org.example.model.Severity;
+import org.example.model.*;
 import org.example.parser.MermaidParser;
 
 import java.security.spec.ECField;
+import java.time.Instant;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,6 +17,7 @@ public class Main {
 
         if (args.length < 1) {
             System.out.println("We need to receive a path to Mermaid-File.");
+            return;
         }
 
         String path = args[0];
@@ -28,6 +28,7 @@ public class Main {
 
         } catch (Exception e) {
             System.err.println("Failed to parse file: " + e.getMessage());
+            System.exit(1);
             return;
         }
 
@@ -35,20 +36,31 @@ public class Main {
         checker.detectErrors();
         List<BPMNError> errorList = checker.getErrorList();
 
-        JsonReport report = generateReport(errorList);
+        JsonReport report = generateReport(path, parser, errorList);
         // we need Json format
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        Gson gson = new GsonBuilder().setPrettyPrinting().serializeNulls().disableHtmlEscaping().create();
         System.out.println(gson.toJson(report));
     }
 
-    private static JsonReport generateReport(List<BPMNError> errorList) {
+
+    private static JsonReport generateReport(String path, MermaidParser parser, List<BPMNError> errorList) {
         JsonReport jsonReport = new JsonReport();
+
+        jsonReport.meta.file = path;
+        jsonReport.meta.timestamp = LocalTime.now().toString();
+        jsonReport.meta.nodeCount = parser.getNodes().size();
+        jsonReport.meta.edgeCount = parser.getEdges().size();
+
 
         for (BPMNError error : errorList) {
             if (error.getSeverity() == Severity.ERROR) {
-                jsonReport.errorCount++;
+                jsonReport.meta.errorCount++;
+            } else if (error.getSeverity() == Severity.WARNING){
+                jsonReport.meta.warningCount++;
             } else {
-                jsonReport.warningCount++;
+                // for new LBL02, if not X/O/AND
+                // according to prompt
+                jsonReport.meta.infoCount++;
             }
 
             JsonIssue issue = new JsonIssue();
@@ -59,12 +71,18 @@ public class Main {
             issue.scope = error.getScope();
             // TODO we havent add any messages for each error
             issue.message = error.getMessage();
+            // TODO add attribute suggestion
+            issue.suggestion = null;
 
             for (Node node : error.getNode()) {
                 JsonNode n = new JsonNode();
                 n.key = node.getKey();
                 n.label = node.getLabel();
-                n.type = node.getType().name();
+                n.type = node.getType().name().toLowerCase();
+                n.location = node.getLocation();
+                for (Role role : node.getRoles()) {
+                    n.roles.add(role.name().toLowerCase());
+                }
                 issue.errorNodes.add(n);
             }
 
@@ -79,14 +97,42 @@ public class Main {
             jsonReport.issues.add(issue);
         }
 
-
+        jsonReport.meta.totalIssues = jsonReport.issues.size();
         return jsonReport;
     }
 
+    private static String convertScope(String scope) {
+        if (scope == null || scope.equals("Main:[]")) {
+            return "main";
+        }
+        if (scope.startsWith("Subprocess:[") && scope.endsWith("]")) {
+            return "subprocess:" + scope.substring("Subprocess:[".length(), scope.length() - 1);
+        }
+        return scope;
+    }
+
     private static class JsonReport {
+        // remove to meta info part
+//        int errorCount = 0;
+//        int warningCount = 0;
+//        int totalIssues = 0;
+        JsonMeta meta = new JsonMeta();
+
+        List<JsonIssue> issues = new ArrayList<>();
+    }
+
+    private static class JsonMeta {
+        String file;
+        String timestamp;
+
+        int nodeCount;
+        int edgeCount;
+
         int errorCount = 0;
         int warningCount = 0;
-        List<JsonIssue> issues = new ArrayList<>();
+        int infoCount = 0;
+
+        int totalIssues = 0;
     }
 
     private static class JsonIssue {
@@ -96,6 +142,8 @@ public class Main {
         String severity;
         String scope;
         String message;
+        // while repairing, extract suggestion as part of new prompt back to llm
+        String suggestion;
         List<JsonNode> errorNodes = new ArrayList<>();
         List<JsonEdge> errorEdges = new ArrayList<>();
     }
@@ -104,6 +152,8 @@ public class Main {
         String key;
         String label;
         String type;
+        String location;
+        List<String> roles = new ArrayList<>();
     }
 
     private static class JsonEdge {

@@ -1193,7 +1193,7 @@ public class BPMNChecker {
                                 List<Edge> errorEdges = new ArrayList<>();
                                 errorEdges.add(loop);
 
-                                BPMNError error = new BPMNError("LOOP-01", "Deadlock",
+                                BPMNError error = new BPMNError("LOOP-01", "Loop Without Reachable End Event",
                                         "Loop Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
                                 errorList.add(error);
                             }
@@ -1230,7 +1230,7 @@ public class BPMNChecker {
                     List<Edge> errorEdges = new ArrayList<>();
                     // errorEdges.add(edge);
 
-                    BPMNError error = new BPMNError("LOOP-03", "Loop Controlled by AND Gateway",
+                    BPMNError error = new BPMNError("LOOP-02", "Loop Controlled by AND Gateway",
                             "Loop Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
                     errorList.add(error);
                 }

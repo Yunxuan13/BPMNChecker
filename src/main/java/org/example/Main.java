@@ -7,8 +7,12 @@ import org.example.model.*;
 import org.example.parser.MermaidParser;
 import org.example.reporter.JsonReporter;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.spec.ECField;
-import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -17,32 +21,123 @@ import java.util.List;
 public class Main {
     public static void main(String[] args) {
 
-        if (args.length < 1) {
+        // design 2 method to use
+        // 1. only give one txt file to check this process (single process)
+        // 2. give a input path and output path --> run all txt files in input file
+        if (args.length == 1) {
+            runSingle(args[0]);
+        } else if (args.length == 2) {
+            runBatch(args[0], args[1]);
+        } else {
             System.out.println("We need to receive a path to Mermaid-File.");
-            return;
         }
 
-        String path = args[0];
 
-        MermaidParser parser;
-        try {
-            parser = new MermaidParser(path);
+//        String path = args[0];
+//
+//        MermaidParser parser;
+//        try {
+//            parser = new MermaidParser(path);
+//
+//        } catch (Exception e) {
+//            System.err.println("Failed to parse file: " + e.getMessage());
+//            System.exit(1);
+//            return;
+//        }
 
-        } catch (Exception e) {
-            System.err.println("Failed to parse file: " + e.getMessage());
-            System.exit(1);
-            return;
-        }
 
+
+//        JsonReport report = generateReport(path, parser, errorList);
+
+        // we need Json format
+//        Gson gson = new GsonBuilder().setPrettyPrinting().serializeNulls().disableHtmlEscaping().create();
+//        System.out.println(gson.toJson(report));
+    }
+
+    private static JsonReporter check(String path) throws Exception {
+        MermaidParser parser = new MermaidParser(path);
         BPMNChecker checker = new BPMNChecker(parser);
         checker.detectErrors();
         List<BPMNError> errorList = checker.getErrorList();
 
-//        JsonReport report = generateReport(path, parser, errorList);
-        JsonReporter report = new JsonReporter(path, parser, errorList);
-        // we need Json format
+        return new JsonReporter(path, parser, errorList);
+    }
+
+    private static void runSingle(String path) {
+        try {
+            JsonReporter reporter = check(path);
+            System.out.println(getJsonForm(reporter));
+        } catch (Exception e) {
+            System.out.println("Failed to deal with " + path + ".");
+        }
+    }
+
+    private static void runBatch(String input, String output) {
+        File inputFolder = new File(input);
+
+        if (!inputFolder.isDirectory()) {
+            System.out.println("Can't find directory:" + input);
+            return;
+        }
+
+        List<File> mermaidFiles = new ArrayList<>();
+        extractTxtFiles(inputFolder, mermaidFiles);
+
+        int successNum = 0;
+        int failedNum = 0;
+
+        for (File file : mermaidFiles) {
+            try {
+                JsonReporter reporter = check(file.getPath());
+
+                FileWriter writer = getFileWriter(input, output, file);
+                writer.write(getJsonForm(reporter));
+                writer.close();
+
+                successNum++;
+
+            } catch (Exception e) {
+                System.out.println("Failed with: " + file.getName() + ".");
+                failedNum++;
+            }
+        }
+
+        System.out.println("Finished. Successful Number: " + successNum + ", Failed Number: " + failedNum + ".");
+    }
+
+    // // under same mermaid process name
+    //                // input was like: llmxxxx/gpt-4o/
+    //                // output was like: llmxxx/gpt-4o/output/ or somewhere else
+    private static FileWriter getFileWriter(String input, String output, File file) throws IOException {
+        String name = file.getPath().substring(input.length());
+        String outputPath = output + name;
+        outputPath = outputPath.replace(".txt", ".json");
+
+        File outputFile = new File(outputPath);
+        outputFile.getParentFile().mkdirs();
+
+        return new FileWriter(outputFile);
+    }
+
+    private static void extractTxtFiles(File folder, List<File> extracted) {
+        File[] files = folder.listFiles();
+
+        if (files == null) {
+            return;
+        }
+
+        for (File file : files) {
+            if (file.isDirectory()) {
+                extractTxtFiles(file, extracted);
+            } else if (file.getName().endsWith(".txt")) {
+                extracted.add(file);
+            }
+        }
+    }
+
+    private static String getJsonForm(JsonReporter reporter) {
         Gson gson = new GsonBuilder().setPrettyPrinting().serializeNulls().disableHtmlEscaping().create();
-        System.out.println(gson.toJson(report));
+        return gson.toJson(reporter);
     }
 
 

@@ -47,31 +47,12 @@ public class JsonReporter {
             // TODO add attribute suggestion
             issue.setSuggestion(null);
 
-            List<JsonNode> errorNodes = new ArrayList<>();
-            for (Node node : error.getNode()) {
-                JsonNode n = new JsonNode();
-                n.setKey(node.getKey());
-                n.setLabel(node.getLabel());
-                n.setType(node.getType().name().toLowerCase());
-                n.setLocation(node.getLocation());
-                List<String> roles = new ArrayList<>();
-                for (Role role : node.getRoles()) {
-                    roles.add(role.name().toLowerCase());
-                }
-                n.setRoles(roles);
-                errorNodes.add(n);
-            }
+            List<JsonNode> errorNodes = getJsonNodes(error);
             issue.setErrorNodes(errorNodes);
 
 
-            List<JsonEdge> errorEdges = new ArrayList<>();
-            for (Edge edge : error.getEdges()) {
-                JsonEdge e = new JsonEdge();
-                e.setSourceKey(edge.getSourceKey());
-                e.setTargetKey(edge.getTargetKey());
-                e.setCondition(edge.getCondition());
-                errorEdges.add(e);
-            }
+            List<JsonEdge> errorEdges = getJsonEdges(error);
+
             issue.setErrorEdges(errorEdges);
 
             this.issues.add(issue);
@@ -81,6 +62,36 @@ public class JsonReporter {
         this.meta.setInfoCount(infoCount);
 
         this.meta.setTotalIssues(this.issues.size());
+    }
+
+    private static List<JsonEdge> getJsonEdges(BPMNError error) {
+        List<JsonEdge> errorEdges = new ArrayList<>();
+        for (Edge edge : error.getEdges()) {
+            JsonEdge e = new JsonEdge();
+            e.setSourceKey(edge.getSourceKey());
+            e.setTargetKey(edge.getTargetKey());
+            e.setCondition(edge.getCondition());
+            errorEdges.add(e);
+        }
+        return errorEdges;
+    }
+
+    private static List<JsonNode> getJsonNodes(BPMNError error) {
+        List<JsonNode> errorNodes = new ArrayList<>();
+        for (Node node : error.getNode()) {
+            JsonNode n = new JsonNode();
+            n.setKey(node.getKey());
+            n.setLabel(node.getLabel());
+            n.setType(node.getType().name().toLowerCase());
+            n.setLocation(node.getLocation());
+            List<String> roles = new ArrayList<>();
+            for (Role role : node.getRoles()) {
+                roles.add(role.name().toLowerCase());
+            }
+            n.setRoles(roles);
+            errorNodes.add(n);
+        }
+        return errorNodes;
     }
 
     private static String convertScope(String scope) {

@@ -15,8 +15,8 @@ public class JsonIssue {
     private String message;
     // while repairing, extract suggestion as part of new prompt back to llm
     private String suggestion;
-    private List<JsonNode> errorNodes = new ArrayList<>();
-    private List<JsonEdge> errorEdges = new ArrayList<>();
+    private List<JsonNode> involvedNodes = new ArrayList<>();
+    private List<JsonEdge> involvedEdges = new ArrayList<>();
 
 //    public JsonIssue(String errorId, String errorName, String category, String severity, String scope, String message, String suggestion, List<JsonNode> errorNodes, List<JsonEdge> errorEdges) {
 //        this.errorId = errorId;
@@ -59,19 +59,19 @@ public class JsonIssue {
     }
 
     public List<JsonNode> getErrorNodes() {
-        return errorNodes;
+        return involvedNodes;
     }
 
     public List<JsonEdge> getErrorEdges() {
-        return errorEdges;
+        return involvedEdges;
     }
 
-    public void setErrorNodes(List<JsonNode> errorNodes) {
-        this.errorNodes = errorNodes;
+    public void setInvolvedNodes(List<JsonNode> errorNodes) {
+        this.involvedNodes = errorNodes;
     }
 
-    public void setErrorEdges(List<JsonEdge> errorEdges) {
-        this.errorEdges = errorEdges;
+    public void setInvolvedEdges(List<JsonEdge> errorEdges) {
+        this.involvedEdges = errorEdges;
     }
 
     public void setErrorId(String errorId) {

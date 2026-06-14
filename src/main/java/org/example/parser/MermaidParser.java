@@ -248,12 +248,13 @@ public class MermaidParser {
             rawShape = RawShape.STARTEVENT;
             label = shape.substring(2, shape.length() - 2);
         } else if (shape.startsWith("(")) {
-            rawShape = RawShape.TASK;
+            rawShape = RawShape.TASKORSUB;
             label = shape.substring(1, shape.length() - 1);
         } else if (shape.startsWith("{")) {
             rawShape = RawShape.GATEWAY;
             label = shape.substring(1, shape.length() - 1);
-        } else {
+        }
+        else {
             rawShape = RawShape.UNKNOWN;
             label = shape;
         }
@@ -265,25 +266,25 @@ public class MermaidParser {
         return this.nodes.get(key);
     }
 
-    private RawShape parseRawShape(String shape) {
-        // can I just make assumptions: we don't make mistakes here
-        if (shape.startsWith("(((")) {
-            return RawShape.STARTEVENT;
-            // label = shape.substring(2, shape.length() - 2);
-        } else if (shape.startsWith("((")) {
-            return RawShape.TASK;
-            // label = shape.substring(1, shape.length() - 1);
-        } else if (shape.startsWith("(")) {
-            return RawShape.ENDEVENT;
-            // label = shape.substring(1, shape.length() - 1);
-        } else if (shape.startsWith("{")) {
-            return RawShape.GATEWAY;
-            // label = shape.substring(1, shape.length() - 1);
-        } else {
-            return RawShape.UNKNOWN;
-            // label = shape;
-        }
-    }
+//    private RawShape parseRawShape(String shape) {
+//        // can I just make assumptions: we don't make mistakes here
+//        if (shape.startsWith("(((")) {
+//            return RawShape.ENDEVENT;
+//            // label = shape.substring(2, shape.length() - 2);
+//        } else if (shape.startsWith("((")) {
+//            return RawShape.STARTEVENT;
+//            // label = shape.substring(1, shape.length() - 1);
+//        } else if (shape.startsWith("(")) {
+//            return RawShape.TASKORSUB;
+//            // label = shape.substring(1, shape.length() - 1);
+//        } else if (shape.startsWith("{")) {
+//            return RawShape.GATEWAY;
+//            // label = shape.substring(1, shape.length() - 1);
+//        } else {
+//            return RawShape.UNKNOWN;
+//            // label = shape;
+//        }
+//    }
 
     private NodeType parseNodeType(String t) {
         return switch (t) {
@@ -293,6 +294,7 @@ public class MermaidParser {
             case "exclusivegateway" -> NodeType.EXCLUSIVEGATEWAY;
             case "inclusivegateway" -> NodeType.INCLUSIVEGATEWAY;
             case "parallelgateway" -> NodeType.PARALLELGATEWAY;
+            case "subprocess" -> NodeType.SUBPROCESS;
             default -> NodeType.UNKNOWN;
         };
     }

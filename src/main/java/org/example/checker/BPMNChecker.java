@@ -109,6 +109,7 @@ public class BPMNChecker {
         // strictly speaking, this is not a structural error. but in prompt this is a pre-defined rule
         // can be ingore or just give a information-level reminder
         // this.lblGatewayNamingError();
+        // this.lblShapeTypeMismatch();
 
         // EDGE
         this.edgeDuplicateFlow();

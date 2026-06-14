@@ -47,13 +47,13 @@ public class JsonReporter {
             // TODO add attribute suggestion
             issue.setSuggestion(null);
 
-            List<JsonNode> errorNodes = getJsonNodes(error);
-            issue.setErrorNodes(errorNodes);
+            List<JsonNode> involvedNodes = getJsonNodes(error);
+            issue.setInvolvedNodes(involvedNodes);
 
 
             List<JsonEdge> errorEdges = getJsonEdges(error);
 
-            issue.setErrorEdges(errorEdges);
+            issue.setInvolvedEdges(errorEdges);
 
             this.issues.add(issue);
         }

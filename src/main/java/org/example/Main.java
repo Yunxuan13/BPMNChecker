@@ -9,6 +9,7 @@ import org.example.parser.MermaidParser;
 import java.security.spec.ECField;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -47,7 +48,7 @@ public class Main {
         JsonReport jsonReport = new JsonReport();
 
         jsonReport.meta.file = path;
-        jsonReport.meta.timestamp = LocalTime.now().toString();
+        jsonReport.meta.timestamp = ZonedDateTime.now().toString();
         jsonReport.meta.nodeCount = parser.getNodes().size();
         jsonReport.meta.edgeCount = parser.getEdges().size();
 
@@ -68,7 +69,7 @@ public class Main {
             issue.errorName = error.getErrorName();
             issue.category = error.getErrorCategory();
             issue.severity = error.getSeverity().name();
-            issue.scope = error.getScope();
+            issue.scope = convertScope(error.getScope());
             // TODO we havent add any messages for each error
             issue.message = error.getMessage();
             // TODO add attribute suggestion

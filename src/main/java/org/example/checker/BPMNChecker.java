@@ -71,7 +71,8 @@ public class BPMNChecker {
         this.seMissingStart();
         this.seMissingEnd();
         this.seMultipleStart();
-        this.seMultipleEnd();
+        // this should be allowed according to bpmn2.0
+        // this.seMultipleEnd();
         this.seStartWithIncoming();
         this.seEndWithOutgoing();
         // GTW
@@ -79,25 +80,39 @@ public class BPMNChecker {
         this.gtwImplicitJoin();
         this.gtwMismatched();
         this.gtwNestingViolation();
+        this.gtwMultipleRoles();
+        this.gtwRedundant();
+
         // XOR
-        this.xorMultipleRoles();
+        // this.xorMultipleRoles();
         this.xorMissingCondition();
-        this.xorRedundant();
+        // this.xorRedundant();
+
         // AND
-        this.andMultipleRoles();
-        this.andRedundant();
+        // this.andMultipleRoles();
+        // this.andRedundant();
         this.andMismatch();
+
         // OR
-        this.orMultipleRoles();
+        // this.orMultipleRoles();
         this.orMissingCondition();
-        this.orRedundant();
+        // this.orRedundant();
+
         // SUB
+        // TODO these cant be detected in the dataset because of the pre-definition in prompt
+        //  only id:subprocess:label as "empty subprocess"
         this.subEmptySubprocess();
         this.subBoundaryViolation();
+
         // LBL
         this.lblDuplicateName();
+        // strictly speaking, this is not a structural error. but in prompt this is a pre-defined rule
+        // can be ingore or just give a information-level reminder
+        // this.lblGatewayNamingError();
+
         // EDGE
         this.edgeDuplicateFlow();
+
         // LOOP
         this.loopDeadlock();
         this.loopInvalidGateway();
@@ -367,29 +382,29 @@ public class BPMNChecker {
         }
     }
 
-    public void seMultipleEnd() {
-        for (List<Node> nodeList : scopeNodes.values()) {
-            // List<Node> errorNodes = new ArrayList<>();
-            List<Edge> errorEdges = new ArrayList<>();
-            String scope = this.getScope(nodeList.get(0));
-            int endNum = 0;
-            List<Node> ends = new ArrayList<>();
-            for (Node node : nodeList) {
-                if (node.getType() == NodeType.ENDEVENT) {
-                    endNum ++;
-                    ends.add(node);
-                }
-            }
-            if (endNum > 1) {
-                // List<Node> errorNodes = new ArrayList<>(ends);
-                BPMNError error = new BPMNError("SE-04", "Multiple End Events", "Start & End Event Errors",
-                        scope, "", ends, errorEdges, Severity.WARNING);
-                errorList.add(error);
-
-            }
-        }
-
-    }
+//    public void seMultipleEnd() {
+//        for (List<Node> nodeList : scopeNodes.values()) {
+//            // List<Node> errorNodes = new ArrayList<>();
+//            List<Edge> errorEdges = new ArrayList<>();
+//            String scope = this.getScope(nodeList.get(0));
+//            int endNum = 0;
+//            List<Node> ends = new ArrayList<>();
+//            for (Node node : nodeList) {
+//                if (node.getType() == NodeType.ENDEVENT) {
+//                    endNum ++;
+//                    ends.add(node);
+//                }
+//            }
+//            if (endNum > 1) {
+//                // List<Node> errorNodes = new ArrayList<>(ends);
+//                BPMNError error = new BPMNError("SE-04", "Multiple End Events", "Start & End Event Errors",
+//                        scope, "", ends, errorEdges, Severity.WARNING);
+//                errorList.add(error);
+//
+//            }
+//        }
+//
+//    }
 
     public void seStartWithIncoming() {
         for (Node node : nodes.values()) {
@@ -729,22 +744,56 @@ public class BPMNChecker {
         }
     }
 
-    // XOR
-    public void xorMultipleRoles() {
+    public void gtwMultipleRoles() {
         for (Node node : nodes.values()) {
-            if (node.getType() == NodeType.EXCLUSIVEGATEWAY && node.getIncomingEdges().size() > 1 && node.getOutgoingEdges().size() > 1) {
+            if (node.isGateway() && node.getIncomingEdges().size() > 1 && node.getOutgoingEdges().size() > 1) {
                 String scope = this.getScope(node);
                 List<Node> errorNodes = new ArrayList<>();
                 List<Edge> errorEdges = new ArrayList<>();
                 errorNodes.add(node);
 
-                BPMNError error = new BPMNError("XOR-01", "XOR Gateway Used as Both Split and Join",
-                        "XOR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+                BPMNError error = new BPMNError("GTW-05", "Gateway Used as Both Split and Join",
+                        "General Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
                 errorList.add(error);
             }
         }
 
     }
+
+    public void gtwRedundant() {
+        for (Node node : nodes.values()) {
+
+            List<Node> errorNodes = new ArrayList<>();
+            List<Edge> errorEdges = new ArrayList<>();
+            String scope = this.getScope(node);
+
+            if (node.isGateway() &&
+                    node.getIncomingEdges().size() == 1 && node.getOutgoingEdges().size() == 1) {
+                errorNodes.add(node);
+
+                BPMNError error = new BPMNError("GTW-06", "Redundant Gateway",
+                        "General Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+                errorList.add(error);
+            }
+        }
+    }
+
+//    // XOR
+//    public void xorMultipleRoles() {
+//        for (Node node : nodes.values()) {
+//            if (node.getType() == NodeType.EXCLUSIVEGATEWAY && node.getIncomingEdges().size() > 1 && node.getOutgoingEdges().size() > 1) {
+//                String scope = this.getScope(node);
+//                List<Node> errorNodes = new ArrayList<>();
+//                List<Edge> errorEdges = new ArrayList<>();
+//                errorNodes.add(node);
+//
+//                BPMNError error = new BPMNError("XOR-01", "XOR Gateway Used as Both Split and Join",
+//                        "XOR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+//                errorList.add(error);
+//            }
+//        }
+//
+//    }
 
     public void xorMissingCondition() {
         for (Node node : nodes.values()) {
@@ -772,61 +821,61 @@ public class BPMNChecker {
         }
     }
 
-    public void xorRedundant() {
-        for (Node node : nodes.values()) {
+//    public void xorRedundant() {
+//        for (Node node : nodes.values()) {
+//
+//            List<Node> errorNodes = new ArrayList<>();
+//            List<Edge> errorEdges = new ArrayList<>();
+//            String scope = this.getScope(node);
+//
+//            if (node.getType() == NodeType.EXCLUSIVEGATEWAY &&
+//                    node.getIncomingEdges().size() == 1 && node.getOutgoingEdges().size() == 1) {
+//                errorNodes.add(node);
+//
+//                BPMNError error = new BPMNError("XOR-03", "Redundant XOR Gateway",
+//                        "XOR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+//                errorList.add(error);
+//            }
+//        }
+//    }
 
-            List<Node> errorNodes = new ArrayList<>();
-            List<Edge> errorEdges = new ArrayList<>();
-            String scope = this.getScope(node);
+//    // AND
+//    public void andMultipleRoles() {
+//        for (Node node : nodes.values()) {
+//            if (node.getType() == NodeType.PARALLELGATEWAY && node.getIncomingEdges().size() > 1
+//                    && node.getOutgoingEdges().size() > 1) {
+//                String scope = this.getScope(node);
+//                List<Node> errorNodes = new ArrayList<>();
+//                List<Edge> errorEdges = new ArrayList<>();
+//
+//                errorNodes.add(node);
+//
+//                BPMNError error = new BPMNError("AND-01", "AND Gateway Used as Both Split and Join",
+//                        "AND Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+//                errorList.add(error);
+//            }
+//        }
+//    }
 
-            if (node.getType() == NodeType.EXCLUSIVEGATEWAY &&
-                    node.getIncomingEdges().size() == 1 && node.getOutgoingEdges().size() == 1) {
-                errorNodes.add(node);
-
-                BPMNError error = new BPMNError("XOR-03", "Redundant XOR Gateway",
-                        "XOR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
-                errorList.add(error);
-            }
-        }
-    }
-
-    // AND
-    public void andMultipleRoles() {
-        for (Node node : nodes.values()) {
-            if (node.getType() == NodeType.PARALLELGATEWAY && node.getIncomingEdges().size() > 1
-                    && node.getOutgoingEdges().size() > 1) {
-                String scope = this.getScope(node);
-                List<Node> errorNodes = new ArrayList<>();
-                List<Edge> errorEdges = new ArrayList<>();
-
-                errorNodes.add(node);
-
-                BPMNError error = new BPMNError("AND-01", "AND Gateway Used as Both Split and Join",
-                        "AND Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
-                errorList.add(error);
-            }
-        }
-    }
-
-    public void andRedundant() {
-
-
-        for (Node node : nodes.values()) {
-
-            List<Node> errorNodes = new ArrayList<>();
-            List<Edge> errorEdges = new ArrayList<>();
-            String scope = this.getScope(node);
-
-            if (node.getType() == NodeType.PARALLELGATEWAY && node.getIncomingEdges().size() == 1
-                    && node.getOutgoingEdges().size() == 1) {
-                errorNodes.add(node);
-
-                BPMNError error = new BPMNError("AND-02", "Redundant AND Gateway",
-                        "AND Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
-                errorList.add(error);
-            }
-        }
-    }
+//    public void andRedundant() {
+//
+//
+//        for (Node node : nodes.values()) {
+//
+//            List<Node> errorNodes = new ArrayList<>();
+//            List<Edge> errorEdges = new ArrayList<>();
+//            String scope = this.getScope(node);
+//
+//            if (node.getType() == NodeType.PARALLELGATEWAY && node.getIncomingEdges().size() == 1
+//                    && node.getOutgoingEdges().size() == 1) {
+//                errorNodes.add(node);
+//
+//                BPMNError error = new BPMNError("AND-02", "Redundant AND Gateway",
+//                        "AND Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+//                errorList.add(error);
+//            }
+//        }
+//    }
 
     public void andMismatch() {
         // TODO
@@ -913,26 +962,26 @@ public class BPMNChecker {
         return incoming;
     }
 
-    // OR
-    public void orMultipleRoles() {
-
-        for (Node node : nodes.values()) {
-
-            if (node.getType() == NodeType.INCLUSIVEGATEWAY && node.getIncomingEdges().size() > 1 && node.getOutgoingEdges().size() > 1) {
-
-                String scope = this.getScope(node);
-                List<Node> errorNodes = new ArrayList<>();
-                errorNodes.add(node);
-                // errorNodes.addAll(reached.keySet());
-
-                List<Edge> errorEdges = new ArrayList<>();
-
-                BPMNError error = new BPMNError("OR-01", "OR Gateway Used as Both Split and Join",
-                        "OR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
-                errorList.add(error);
-            }
-        }
-    }
+//    // OR
+//    public void orMultipleRoles() {
+//
+//        for (Node node : nodes.values()) {
+//
+//            if (node.getType() == NodeType.INCLUSIVEGATEWAY && node.getIncomingEdges().size() > 1 && node.getOutgoingEdges().size() > 1) {
+//
+//                String scope = this.getScope(node);
+//                List<Node> errorNodes = new ArrayList<>();
+//                errorNodes.add(node);
+//                // errorNodes.addAll(reached.keySet());
+//
+//                List<Edge> errorEdges = new ArrayList<>();
+//
+//                BPMNError error = new BPMNError("OR-01", "OR Gateway Used as Both Split and Join",
+//                        "OR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+//                errorList.add(error);
+//            }
+//        }
+//    }
 
     public void orMissingCondition() {
         for (Node node : nodes.values()) {
@@ -965,21 +1014,21 @@ public class BPMNChecker {
         }
     }
 
-    public void orRedundant() {
-        for (Node node : nodes.values()) {
-            if (node.getType() == NodeType.INCLUSIVEGATEWAY && node.getIncomingEdges().size() == 1 && node.getOutgoingEdges().size() == 1) {
-
-                String scope = this.getScope(node);
-                List<Node> errorNodes = new ArrayList<>();
-                errorNodes.add(node);
-                List<Edge> errorEdges = new ArrayList<>();
-
-                BPMNError error = new BPMNError("OR-03", "Redundant OR Gateway",
-                        "OR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
-                errorList.add(error);
-            }
-        }
-    }
+//    public void orRedundant() {
+//        for (Node node : nodes.values()) {
+//            if (node.getType() == NodeType.INCLUSIVEGATEWAY && node.getIncomingEdges().size() == 1 && node.getOutgoingEdges().size() == 1) {
+//
+//                String scope = this.getScope(node);
+//                List<Node> errorNodes = new ArrayList<>();
+//                errorNodes.add(node);
+//                List<Edge> errorEdges = new ArrayList<>();
+//
+//                BPMNError error = new BPMNError("OR-03", "Redundant OR Gateway",
+//                        "OR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+//                errorList.add(error);
+//            }
+//        }
+//    }
 
     // SUB
     public void subEmptySubprocess() {
@@ -1071,6 +1120,35 @@ public class BPMNChecker {
                 // cant define scope and we dont really need them
                 BPMNError error = new BPMNError("LBL-01", "Duplicate Activity Name",
                         "Label Errors", "global", "", errorNodes, errorEdges, Severity.WARNING);
+                errorList.add(error);
+            }
+        }
+    }
+
+    public void lblGatewayNamingError() {
+        for (Node node : nodes.values()) {
+            String expected = null;
+            if (node.getType() == NodeType.EXCLUSIVEGATEWAY) {
+                expected = "x";
+            } else if (node.getType() == NodeType.PARALLELGATEWAY) {
+                expected = "AND";
+            } else if (node.getType() == NodeType.INCLUSIVEGATEWAY) {
+                expected = "O";
+            }
+
+            if (expected == null) {
+                continue;
+            }
+
+            String actual = node.getLabel();
+
+            if (actual != null && !actual.equals(expected)) {
+                String scope = this.getScope(node);
+                List<Node> errorNodes = new ArrayList<>();
+                errorNodes.add(node);
+                List<Edge> errorEdges = new ArrayList<>();
+                BPMNError error = new BPMNError("LBL-02", "Non-Standard Gateway Shape Label",
+                        "Label Errors", scope, "", errorNodes, errorEdges, Severity.INFO);
                 errorList.add(error);
             }
         }

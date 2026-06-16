@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BPMNCheckerTest {
-    private static final String PATH = "User/xuan/Documents/thesis/categories/";
+    private static final String PATH = "/Users/xuan/Documents/thesis/categories/";
 
     private BPMNChecker check(String folder, String file) throws Exception {
         MermaidParser parser = new MermaidParser(PATH + folder + "/" + file);

@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class MermaidParserTest {
 
     // TODO vorsicht! under this path, it is NOT full mermaid code for all situation
-    private static final String PATH = "User/xuan/documents/thesis/Script_drafts/";
+    private static final String PATH = "/Users/xuan/documents/thesis/Script_drafts/";
 
 
     @Test

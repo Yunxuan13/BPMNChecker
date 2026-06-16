@@ -10,7 +10,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MultiErrorTest {
-    private static final String Path = "User/xuan/documents/thesis/llm-generated-mermaid-models/gpt-4o/domains/";
+    private static final String Path = "/Users/xuan/documents/thesis/llm-generated-mermaid-models/gpt-4o/domains/";
 
     private BPMNChecker check(String path) throws Exception {
         MermaidParser parser = new MermaidParser(path);

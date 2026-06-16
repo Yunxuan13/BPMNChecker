@@ -814,7 +814,7 @@ public class BPMNChecker {
                 if (conditionNum < node.getOutgoingEdges().size() - 1) {
                     errorNode.add(node);
                     List<Edge> errorEdge = new ArrayList<>(without);
-                    BPMNError error = new BPMNError("XOR-02", "Missing Condition on XOR Outgoing Flow",
+                    BPMNError error = new BPMNError("XOR-01", "Missing Condition on XOR Outgoing Flow",
                             "XOR Gateway Errors", scope, "", errorNode, errorEdge, Severity.ERROR);
                     errorList.add(error);
                 }
@@ -943,7 +943,7 @@ public class BPMNChecker {
                 errorNodes.addAll(reached.keySet());
 
                 List<Edge> errorEdges = new ArrayList<>();
-                BPMNError error = new BPMNError("AND-03", "AND Split and Join Branch Count Mismatch",
+                BPMNError error = new BPMNError("AND-01", "AND Split and Join Branch Count Mismatch",
                         "AND Gateway Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
                 errorList.add(error);
             }
@@ -1007,7 +1007,7 @@ public class BPMNChecker {
                     List<Edge> errorEdges = new ArrayList<>(without);
 
 
-                    BPMNError error = new BPMNError("OR-02", "Missing Condition on OR Outgoing Flow",
+                    BPMNError error = new BPMNError("OR-01", "Missing Condition on OR Outgoing Flow",
                             "OR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
                     errorList.add(error);
                 }

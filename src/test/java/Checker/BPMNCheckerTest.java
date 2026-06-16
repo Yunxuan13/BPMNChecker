@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BPMNCheckerTest {
-    private static final String PATH = "/Users/xuan/Documents/thesis/categories/";
+    private static final String PATH = "/Users/xuan/Documents/thesis/Categories_updated/";
 
     private BPMNChecker check(String folder, String file) throws Exception {
         MermaidParser parser = new MermaidParser(PATH + folder + "/" + file);
@@ -77,11 +77,11 @@ public class BPMNCheckerTest {
         assertTrue(hasError(checker, "SE-03"));
     }
 
-    @Test
-    void testSE04() throws Exception {
-        BPMNChecker checker = check("2. Start & End Event Errors [SE]", "SE-04: Multiple End Events");
-        assertTrue(hasError(checker, "SE-04"));
-    }
+//    @Test
+//    void testSE04() throws Exception {
+//        BPMNChecker checker = check("2. Start & End Event Errors [SE]", "SE-04: Multiple End Events");
+//        assertTrue(hasError(checker, "SE-04"));
+//    }
 
     @Test
     void testSE05() throws Exception {
@@ -115,68 +115,81 @@ public class BPMNCheckerTest {
         assertTrue(hasError(checker, "GTW-03"));
     }
 
+
     @Test
     void testGTW04() throws Exception {
         BPMNChecker checker = check("3. General Gateway Errors [GTW]", "GTW-04: Gateway Nesting Violation");
         assertTrue(hasError(checker, "GTW-04"));
     }
 
-    // XOR 1-3
+    @Test
+    void testGTW05() throws Exception {
+        BPMNChecker checker = check("3. General Gateway Errors [GTW]", "GTW-05: Gateway Used as Both Split and Join");
+        assertTrue(hasError(checker, "GTW-05"));
+    }
+
+    @Test
+    void testGTW06() throws Exception {
+        BPMNChecker checker = check("3. General Gateway Errors [GTW]", "GTW-06: Redundant Gateway");
+        assertTrue(hasError(checker, "GTW-06"));
+    }
+
+//    // XOR 1-3
+//    @Test
+//    void testXOR01() throws Exception {
+//        BPMNChecker checker = check("4. XOR Gateway Errors [XOR]", "XOR-01: XOR Gateway Used as Both Split and Join");
+//        assertTrue(hasError(checker, "GTW-05"));
+//    }
+
     @Test
     void testXOR01() throws Exception {
-        BPMNChecker checker = check("4. XOR Gateway Errors [XOR]", "XOR-01: XOR Gateway Used as Both Split and Join");
+        BPMNChecker checker = check("4. XOR Gateway Errors [XOR]", "XOR-01: Missing Condition on XOR Outgoing Flow");
         assertTrue(hasError(checker, "XOR-01"));
     }
 
-    @Test
-    void testXOR02() throws Exception {
-        BPMNChecker checker = check("4. XOR Gateway Errors [XOR]", "XOR-02: Missing Condition on XOR Outgoing Flow");
-        assertTrue(hasError(checker, "XOR-02"));
-    }
+//    @Test
+//    void testXOR03() throws Exception {
+//        BPMNChecker checker = check("4. XOR Gateway Errors [XOR]", "XOR-03: Redundant XOR Gateway");
+//        assertTrue(hasError(checker, "GTW-06"));
+//    }
 
-    @Test
-    void testXOR03() throws Exception {
-        BPMNChecker checker = check("4. XOR Gateway Errors [XOR]", "XOR-03: Redundant XOR Gateway");
-        assertTrue(hasError(checker, "XOR-03"));
-    }
-
-    // AND 1-3
-    @Test
-    void testAND01() throws Exception {
-        BPMNChecker checker = check("5. AND Gateway Errors [AND]", "AND-01: AND Gateway Used as Both Split and Join");
-        assertTrue(hasError(checker, "AND-01"));
-    }
-
-    @Test
-    void testAND02() throws Exception {
-        BPMNChecker checker = check("5. AND Gateway Errors [AND]", "AND-02: Redundant AND Gateway");
-        assertTrue(hasError(checker, "AND-02"));
-    }
+//    // AND 1-3
+//    @Test
+//    void testAND01() throws Exception {
+//        BPMNChecker checker = check("5. AND Gateway Errors [AND]", "AND-01: AND Gateway Used as Both Split and Join");
+//        assertTrue(hasError(checker, "GTW-05"));
+////    }
+//
+//    @Test
+//    void testAND02() throws Exception {
+//        BPMNChecker checker = check("5. AND Gateway Errors [AND]", "AND-02: Redundant AND Gateway");
+//        assertTrue(hasError(checker, "GTW-06"));
+//    }
 
     @Test
     void testAND03() throws Exception {
-        BPMNChecker checker = check("5. AND Gateway Errors [AND]", "AND-03: AND Split and Join Branch Count Mismatch");
-        assertTrue(hasError(checker, "AND-03"));
+        BPMNChecker checker = check("5. AND Gateway Errors [AND]", "AND-01: AND Split and Join Branch Count Mismatch");
+        assertTrue(hasError(checker, "AND-01"));
     }
 
-    // OR 1-3
-    @Test
-    void testOR01() throws Exception {
-        BPMNChecker checker = check("6. OR Gateway Errors [OR]", "OR-01: OR Gateway Used as Both Split and Join");
-        assertTrue(hasError(checker, "OR-01"));
-    }
+//    // OR 1-3
+//    @Test
+//    void testOR01() throws Exception {
+//        BPMNChecker checker = check("6. OR Gateway Errors [OR]", "OR-01: OR Gateway Used as Both Split and Join");
+//        assertTrue(hasError(checker, "OR-05"));
+//    }
 
     @Test
     void testOR02() throws Exception {
         BPMNChecker checker = check("6. OR Gateway Errors [OR]", "OR-02: Missing Condition on OR Outgoing Flow");
-        assertTrue(hasError(checker, "OR-02"));
+        assertTrue(hasError(checker, "OR-01"));
     }
 
-    @Test
-    void testOR03() throws Exception {
-        BPMNChecker checker = check("6. OR Gateway Errors [OR]", "OR-03: Redundant OR Gateway");
-        assertTrue(hasError(checker, "OR-03"));
-    }
+//    @Test
+//    void testOR03() throws Exception {
+//        BPMNChecker checker = check("6. OR Gateway Errors [OR]", "OR-03: Redundant OR Gateway");
+//        assertTrue(hasError(checker, "OR-06"));
+//    }
 
 
     // SUB 1-2

@@ -42,7 +42,7 @@ public class JsonReporter {
             issue.setCategory(error.getErrorCategory());
             issue.setSeverity(error.getSeverity().name());
             issue.setScope(convertScope(error.getScope()));
-            // TODO we havent add any messages for each error
+
             issue.setMessage(error.getMessage());
             // TODO add attribute suggestion
             issue.setSuggestion(null);

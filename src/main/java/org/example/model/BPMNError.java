@@ -13,7 +13,7 @@ public class BPMNError {
     private final String message;
     private final List<Node> nodes;
     private final List<Edge> edges;
-    private Severity severity;
+    private final Severity severity;
 
     public BPMNError(String errorId, String errorName, String errorCategory, String scope, String message, List<Node> nodes, List<Edge> edges, Severity severity) {
         this.errorId = errorId;

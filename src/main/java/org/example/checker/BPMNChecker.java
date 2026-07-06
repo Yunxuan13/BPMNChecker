@@ -4,7 +4,6 @@ import org.example.model.*;
 import org.example.parser.MermaidParser;
 
 import java.util.*;
-import java.util.stream.Stream;
 
 public class BPMNChecker {
 
@@ -220,7 +219,7 @@ public class BPMNChecker {
             }
 
         }
-        // TODO BFS
+
     }
 
 //    // separate nodes by scope
@@ -606,8 +605,6 @@ public class BPMNChecker {
 
         while (current != null && arrival.add(current.getKey())) {
 
-            // TODO mergeGateway/splitGateway/normalNode
-
             if (this.isMerge(current, loopEdges)) {
                 if (balance == 0) {
                     return current;
@@ -902,7 +899,6 @@ public class BPMNChecker {
 //    }
 
     public void andMismatch() {
-        // TODO
 
         for (List<Node> nodeList : this.scopeNodes.values()) {
             Set<Edge> loopEdges = this.getDAG(nodeList);
@@ -973,9 +969,6 @@ public class BPMNChecker {
                 errorList.add(error);
             }
         }
-
-
-
     }
 
     private int getIncomingWithoutLoop(Node node, Set<Edge> loopEdges) {

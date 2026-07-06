@@ -57,10 +57,8 @@ public class BPMNChecker {
         }
     }
 
-    // TODO: 29 + 2 pre-defined error classification
-
     public void detectErrors() {
-        // TODO: test all errors, if detected, add to errorList
+
         // CON
         this.conIsolatedNode();
         this.conMissingIncomingSequenceFlow();
@@ -115,7 +113,7 @@ public class BPMNChecker {
         this.edgeDuplicateFlow();
 
         // LOOP
-        this.loopDeadlock();
+        this.loopWithoutReachableEnd();
         this.loopInvalidGateway();
     }
 
@@ -143,7 +141,8 @@ public class BPMNChecker {
                 // public BPMNError(String errorId, String errorName, String errorCategory, String scope, String message, List<Edge> edges)
                 BPMNError error = new BPMNError("CON-01", "Isolated Node",
                         "Connectivity and Reachability", this.getScope(node),
-                        "", errorNodes, errorEdges, Severity.ERROR);
+                        "Node '" + node.getKey() + "' has no incoming and no outgoing sequence flows."
+                        , errorNodes, errorEdges, Severity.ERROR);
                 errorList.add(error);
             }
         }
@@ -172,7 +171,8 @@ public class BPMNChecker {
 
                 // public BPMNError(String errorId, String errorName, String errorCategory, String scope, String message, List<Edge> edges)
                 BPMNError error = new BPMNError("CON-02", "Missing Incoming Sequence Flow",
-                        "Connectivity and Reachability", scope, "",
+                        "Connectivity and Reachability", scope,
+                        "Node '" + node.getKey() + "' has outgoing flows but no incoming sequence flow.",
                         errorNodes, errorEdges, Severity.ERROR);
                 errorList.add(error);
             }
@@ -192,7 +192,8 @@ public class BPMNChecker {
 
                 // public BPMNError(String errorId, String errorName, String errorCategory, String scope, String message, List<Edge> edges)
                 BPMNError error = new BPMNError("CON-03", "Missing Outgoing Sequence Flow",
-                        "Connectivity and Reachability", scope, "",
+                        "Connectivity and Reachability", scope,
+                        "Node '" + node.getKey() + "' has incoming flows but no outgoing sequence flow.",
                         errorNodes, errorEdges, Severity.ERROR);
                 errorList.add(error);
             }
@@ -212,7 +213,8 @@ public class BPMNChecker {
                 List<Edge> errorEdges = new ArrayList<>();
                 String scope = this.getScope(errorNode);
                 BPMNError error = new BPMNError("CON-04", "Unreachable Activity",
-                        "Connectivity and Reachability", scope, "",
+                        "Connectivity and Reachability", scope,
+                        "Node '" + errorNode.getKey() + "' is not reachable from any start event in its scope.",
                         errorNodes, errorEdges, Severity.ERROR);
                 errorList.add(error);
             }
@@ -309,7 +311,8 @@ public class BPMNChecker {
                     List<Edge> errorEdges = new ArrayList<>();
                     String scope = this.getScope(node);
                     BPMNError error = new BPMNError("CON-05", "End Event Unreachable from Start",
-                            "Connectivity and Reachability", scope, "",
+                            "Connectivity and Reachability", scope,
+                            "End event '" + node.getKey() + "' is not reachable from any start event in its scope.",
                             errorNodes, errorEdges, Severity.ERROR);
                     errorList.add(error);
                 }
@@ -333,8 +336,9 @@ public class BPMNChecker {
                 }
             }
             if (!startExist) {
-                BPMNError error = new BPMNError("SE-01", "Missing Start Event", "Start & End Event Errors",
-                        scope, "", errorNodes, errorEdges, Severity.ERROR);
+                BPMNError error = new BPMNError("SE-01", "Missing Start Event", "Start & End Event Errors", scope,
+                        "No start event found in scope " + scope + ".",
+                        errorNodes, errorEdges, Severity.ERROR);
                 errorList.add(error);
             }
         }
@@ -353,8 +357,9 @@ public class BPMNChecker {
                 }
             }
             if (!endExist) {
-                BPMNError error = new BPMNError("SE-02", "Missing End Event", "Start & End Event Errors",
-                        scope, "", errorNodes, errorEdges, Severity.ERROR);
+                BPMNError error = new BPMNError("SE-02", "Missing End Event", "Start & End Event Errors", scope,
+                        "No end event found in scope " + scope + ".",
+                        errorNodes, errorEdges, Severity.ERROR);
                 errorList.add(error);
             }
         }
@@ -376,8 +381,8 @@ public class BPMNChecker {
             }
             if (startNum > 1) {
                 // List<Node> errorNodes = new ArrayList<>(starts);
-                BPMNError error = new BPMNError("SE-03", "Multiple Start Events", "Start & End Event Errors",
-                        scope, "", starts, errorEdges, Severity.WARNING);
+                BPMNError error = new BPMNError("SE-03", "Multiple Start Events", "Start & End Event Errors", scope,
+                        startNum + " start events found in scope " + scope + " (expected exactly one).", starts, errorEdges, Severity.WARNING);
                 errorList.add(error);
             }
         }
@@ -414,8 +419,10 @@ public class BPMNChecker {
             if (node.getType() == NodeType.STARTEVENT && !node.getIncomingEdges().isEmpty()) {
                 errorNodes.add(node);
                 List<Edge> errorEdges = new ArrayList<>(node.getIncomingEdges());
-                BPMNError error = new BPMNError("SE-05", "Start Event with Incoming Sequence Flow", "Start & End Event Errors",
-                        scope, "", errorNodes, errorEdges, Severity.ERROR);
+                BPMNError error = new BPMNError("SE-04", "Start Event with Incoming Sequence Flow",
+                        "Start & End Event Errors", scope,
+                        "Start event '" + node.getKey() + "' has " + node.getIncomingEdges().size() + " incoming sequence flow(s).",
+                        errorNodes, errorEdges, Severity.ERROR);
                 errorList.add(error);
             }
         }
@@ -428,8 +435,9 @@ public class BPMNChecker {
             if (node.getType() == NodeType.ENDEVENT && !node.getOutgoingEdges().isEmpty()) {
                 errorNodes.add(node);
                 List<Edge> errorEdges = new ArrayList<>(node.getOutgoingEdges());
-                BPMNError error = new BPMNError("SE-06", "End Event with Outgoing Sequence Flow", "Start & End Event Errors",
-                        scope, "", errorNodes, errorEdges, Severity.ERROR);
+                BPMNError error = new BPMNError("SE-05", "End Event with Outgoing Sequence Flow", "Start & End Event Errors", scope,
+                        "End event '" + node.getKey() + "' has " + node.getOutgoingEdges().size() + " outgoing sequence flow(s).",
+                        errorNodes, errorEdges, Severity.ERROR);
                 errorList.add(error);
             }
         }
@@ -443,8 +451,9 @@ public class BPMNChecker {
                 errorNodes.add(node);
                 List<Edge> errorEdges = new ArrayList<>(node.getOutgoingEdges());
                 String scope = this.getScope(node);
-                BPMNError error = new BPMNError("GTW-01", "Implicit Split", "General Gateway Errors",
-                        scope, "", errorNodes, errorEdges, Severity.WARNING);
+                BPMNError error = new BPMNError("GTW-01", "Implicit Split", "General Gateway Errors", scope,
+                        "Non-gateway node '" + node.getKey() + "' has " + node.getOutgoingEdges().size() + " outgoing flows (implicit split).",
+                        errorNodes, errorEdges, Severity.WARNING);
                 errorList.add(error);
             }
         }
@@ -457,8 +466,9 @@ public class BPMNChecker {
                 errorNodes.add(node);
                 List<Edge> errorEdges = new ArrayList<>(node.getIncomingEdges());
                 String scope = this.getScope(node);
-                BPMNError error = new BPMNError("GTW-02", "Implicit Join", "General Gateway Errors",
-                        scope, "", errorNodes, errorEdges, Severity.WARNING);
+                BPMNError error = new BPMNError("GTW-02", "Implicit Join", "General Gateway Errors", scope,
+                        "Non-gateway node '" + node.getKey() + "' has " + node.getIncomingEdges().size() + " incoming flows (implicit join).",
+                        errorNodes, errorEdges, Severity.WARNING);
                 errorList.add(error);
             }
         }
@@ -490,7 +500,9 @@ public class BPMNChecker {
                 List<Edge> errorEdges = new ArrayList<>();
                 String scope = this.getScope(node);
                 BPMNError error = new BPMNError("GTW-03", "Mismatched Gateway Types", "General Gateway Errors",
-                        scope, "", errorNodes, errorEdges, Severity.ERROR);
+                        scope,
+                        "Split gateway '" + node.getKey() + "' is joined by '" + join.getKey() + "' of a different gateway type.",
+                        errorNodes, errorEdges, Severity.ERROR);
                 this.errorList.add(error);
 
             }
@@ -736,7 +748,9 @@ public class BPMNChecker {
                         List<Edge> errorEdges = new ArrayList<>();
 
                         BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation",
-                                "General Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+                                "General Gateway Errors", scope,
+                                "Branches of split gateway '" + node.getKey() + "' merge at " + joinKeys.size() + " different join nodes.",
+                                errorNodes, errorEdges, Severity.WARNING);
                         errorList.add(error);
                     }
                 }
@@ -754,7 +768,9 @@ public class BPMNChecker {
                 errorNodes.add(node);
 
                 BPMNError error = new BPMNError("GTW-05", "Gateway Used as Both Split and Join",
-                        "General Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+                        "General Gateway Errors", scope,
+                        "Gateway '" + node.getKey() + "' is used as both split and join.",
+                        errorNodes, errorEdges, Severity.WARNING);
                 errorList.add(error);
             }
         }
@@ -771,9 +787,13 @@ public class BPMNChecker {
             if (node.isGateway() &&
                     node.getIncomingEdges().size() == 1 && node.getOutgoingEdges().size() == 1) {
                 errorNodes.add(node);
+                errorEdges.addAll(node.getOutgoingEdges());
+                errorEdges.addAll(node.getIncomingEdges());
 
                 BPMNError error = new BPMNError("GTW-06", "Redundant Gateway",
-                        "General Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+                        "General Gateway Errors", scope,
+                        "Gateway '" + node.getKey() + "' has exactly one incoming and one outgoing flow and has no routing effect.",
+                        errorNodes, errorEdges, Severity.WARNING);
                 errorList.add(error);
             }
         }
@@ -815,7 +835,10 @@ public class BPMNChecker {
                     errorNode.add(node);
                     List<Edge> errorEdge = new ArrayList<>(without);
                     BPMNError error = new BPMNError("XOR-01", "Missing Condition on XOR Outgoing Flow",
-                            "XOR Gateway Errors", scope, "", errorNode, errorEdge, Severity.ERROR);
+                            "XOR Gateway Errors", scope,
+                            "XOR gateway '" + node.getKey() + "' has " + without.size() +
+                                    " outgoing flow(s) without a condition (at most one default flow is allowed).",
+                            errorNode, errorEdge, Severity.ERROR);
                     errorList.add(error);
                 }
             }
@@ -944,7 +967,9 @@ public class BPMNChecker {
 
                 List<Edge> errorEdges = new ArrayList<>();
                 BPMNError error = new BPMNError("AND-01", "AND Split and Join Branch Count Mismatch",
-                        "AND Gateway Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
+                        "AND Gateway Errors", scope,
+                        "Branches of AND split '" + node.getKey() + "' do not synchronize at a single matching AND join.",
+                        errorNodes, errorEdges, Severity.ERROR);
                 errorList.add(error);
             }
         }
@@ -1008,7 +1033,9 @@ public class BPMNChecker {
 
 
                     BPMNError error = new BPMNError("OR-01", "Missing Condition on OR Outgoing Flow",
-                            "OR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
+                            "OR Gateway Errors", scope,
+                            "OR gateway '" + node.getKey() + "' has " + without.size() + " outgoing flow(s) without a condition (at most one default flow is allowed).",
+                            errorNodes, errorEdges, Severity.ERROR);
                     errorList.add(error);
                 }
             }
@@ -1052,7 +1079,9 @@ public class BPMNChecker {
                     List<Edge> errorEdges = new ArrayList<>();
                     String scope = this.getScope(node);
                     BPMNError error = new BPMNError("SUB-01", "Empty Subprocess",
-                            "Subprocess Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
+                            "Subprocess Errors", scope,
+                            "Subprocess '" + node.getId() + "' contains no nodes.",
+                            errorNodes, errorEdges, Severity.ERROR);
                     errorList.add(error);
                 }
             }
@@ -1080,7 +1109,9 @@ public class BPMNChecker {
                 errorEdges.add(edge);
 
                 BPMNError error = new BPMNError("SUB-02", "Subprocess Boundary Violation",
-                        "Subprocess Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
+                        "Subprocess Errors", scope,
+                        "Sequence flow from '" + source.getKey() + "' to '" + target.getKey() + "' crosses a subprocess boundary.",
+                        errorNodes, errorEdges, Severity.ERROR);
                 this.errorList.add(error);
             }
         }
@@ -1120,40 +1151,42 @@ public class BPMNChecker {
 
                 // cant define scope and we dont really need them
                 BPMNError error = new BPMNError("LBL-01", "Duplicate Activity Name",
-                        "Label Errors", "global", "", errorNodes, errorEdges, Severity.WARNING);
+                        "Label Errors", "global",
+                        "Task label '" + ln.get(0).getLabel() + "' is used by " + ln.size() + " different tasks.",
+                        errorNodes, errorEdges, Severity.WARNING);
                 errorList.add(error);
             }
         }
     }
 
-    public void lblGatewayNamingError() {
-        for (Node node : nodes.values()) {
-            String expected = null;
-            if (node.getType() == NodeType.EXCLUSIVEGATEWAY) {
-                expected = "x";
-            } else if (node.getType() == NodeType.PARALLELGATEWAY) {
-                expected = "AND";
-            } else if (node.getType() == NodeType.INCLUSIVEGATEWAY) {
-                expected = "O";
-            }
-
-            if (expected == null) {
-                continue;
-            }
-
-            String actual = node.getLabel();
-
-            if (actual != null && !actual.equals(expected)) {
-                String scope = this.getScope(node);
-                List<Node> errorNodes = new ArrayList<>();
-                errorNodes.add(node);
-                List<Edge> errorEdges = new ArrayList<>();
-                BPMNError error = new BPMNError("LBL-02", "Non-Standard Gateway Shape Label",
-                        "Label Errors", scope, "", errorNodes, errorEdges, Severity.INFO);
-                errorList.add(error);
-            }
-        }
-    }
+//    public void lblGatewayNamingError() {
+//        for (Node node : nodes.values()) {
+//            String expected = null;
+//            if (node.getType() == NodeType.EXCLUSIVEGATEWAY) {
+//                expected = "x";
+//            } else if (node.getType() == NodeType.PARALLELGATEWAY) {
+//                expected = "AND";
+//            } else if (node.getType() == NodeType.INCLUSIVEGATEWAY) {
+//                expected = "O";
+//            }
+//
+//            if (expected == null) {
+//                continue;
+//            }
+//
+//            String actual = node.getLabel();
+//
+//            if (actual != null && !actual.equals(expected)) {
+//                String scope = this.getScope(node);
+//                List<Node> errorNodes = new ArrayList<>();
+//                errorNodes.add(node);
+//                List<Edge> errorEdges = new ArrayList<>();
+//                BPMNError error = new BPMNError("LBL-02", "Non-Standard Gateway Shape Label",
+//                        "Label Errors", scope, "", errorNodes, errorEdges, Severity.INFO);
+//                errorList.add(error);
+//            }
+//        }
+//    }
 
     // EDGE
     public void edgeDuplicateFlow() {
@@ -1195,7 +1228,9 @@ public class BPMNChecker {
 
                 // cant define scope and we dont really need them
                 BPMNError error = new BPMNError("EDGE-01", "Duplicate Sequence Flow",
-                        "Edge Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
+                        "Edge Errors", scope,
+                        errorEdges.size() + " sequence flows connect '" + errorEdges.get(0).getSourceKey() + "' to '" + errorEdges.get(0).getTargetKey() + "' (redundant: multiple flows to the same target add no routing effect).",
+                        errorNodes, errorEdges, Severity.WARNING);
                 errorList.add(error);
             }
         }
@@ -1220,7 +1255,7 @@ public class BPMNChecker {
     }
 
     // LOOP
-    public void loopDeadlock() {
+    public void loopWithoutReachableEnd() {
         // in a loop, it cant arrive at end event of this scope
         for (List<Node> nodeList : scopeNodes.values()) {
             boolean hasEndevent = false;
@@ -1273,7 +1308,9 @@ public class BPMNChecker {
                                 errorEdges.add(loop);
 
                                 BPMNError error = new BPMNError("LOOP-01", "Loop Without Reachable End Event",
-                                        "Loop Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
+                                        "Loop Errors", scope,
+                                        "Loop entered at '" + enterNode.getKey() + "' cannot reach any end event in its scope (livelock / infinite loop).",
+                                        errorNodes, errorEdges, Severity.ERROR);
                                 errorList.add(error);
                             }
                         }
@@ -1307,10 +1344,12 @@ public class BPMNChecker {
                     }
 
                     List<Edge> errorEdges = new ArrayList<>();
-                    // errorEdges.add(edge);
+                    errorEdges.add(edge);
 
                     BPMNError error = new BPMNError("LOOP-02", "Loop Controlled by AND Gateway",
-                            "Loop Errors", scope, "", errorNodes, errorEdges, Severity.ERROR);
+                            "Loop Errors", scope,
+                            "Loop back-edge from '" + edge.getSourceKey() + "' to '" + edge.getTargetKey() + "' is controlled by a parallel (AND) gateway.",
+                            errorNodes, errorEdges, Severity.ERROR);
                     errorList.add(error);
                 }
             }

@@ -18,6 +18,11 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+
+// export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home
+
+// cd /Users/xuan/Documents/thesis/BPMN-Structural-Error-checker
+//./gradlew run --args="/Users/xuan/Documents/thesis/llm-generated-mermaid-models/gpt-4o /Users/xuan/Documents/thesis/llm-generated-mermaid-models/gpt-4o-output"
 public class Main {
     public static void main(String[] args) {
 

@@ -1,5 +1,5 @@
 package org.example.model;
 
 public enum Severity {
-    WARNING, ERROR, INFO
+    WARNING, ERROR //, INFO
 }

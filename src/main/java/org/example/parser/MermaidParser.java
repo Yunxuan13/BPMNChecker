@@ -14,12 +14,11 @@ import java.util.*;
 
 public class MermaidParser {
 
-    // nodes need to be updated, arrayList --> linkedHashMap
     private LinkedHashMap<String, Node> nodes;
     private List<Edge> edges;
 
     private MainProcess mainProcess;
-    // include main (or not?)
+
     private List<Subprocess> subprocesses;
     private List<ProcessGraph> processes;
 
@@ -32,7 +31,7 @@ public class MermaidParser {
         try {
             this.parse(mermaidPath);
         } catch (Exception e) {
-            throw new Exception("Failed to parse Mermaid file '" + mermaidPath + "': " +e.getMessage());
+            throw new Exception("Failed to parse Mermaid file '" + mermaidPath + "': " +e.getMessage(), e);
         }
 
     }
@@ -54,7 +53,7 @@ public class MermaidParser {
             if (line.isEmpty() || line.startsWith("graph") || line.startsWith("flowchart") || line.startsWith("%%") || line.startsWith("direction")) {
                 continue;
 
-            } else if (this.isSubgraph(line)){
+            } else if (this.isSubgraph(line)) {
 
                 // e.g. subgraph subId [subgraph-label]
                 // (with space instead of ":")
@@ -110,8 +109,7 @@ public class MermaidParser {
             } else if (this.isSubgraphEnd(line)) {
 
                 if (subs.isEmpty()) {
-                    // TODO: Exception sentence
-                    throw new Exception("Unmatched 'end'");
+                    throw new Exception("Unmatched 'end': no open subgraph block to close");
                 }
                 // end and only end
                 // pop current subprocess
@@ -153,7 +151,7 @@ public class MermaidParser {
                     sourceKey = source + ":" + "subprocess";
                     if (!this.nodes.containsKey(sourceKey)) {
                         String l = subs.isEmpty() ? null : subs.peek();
-                        Node n = new Node(source, "subgraph " + source +" [" + source +"]", NodeType.SUBPROCESS, source, RawShape.SUBPROCESS, l);
+                        Node n = new Node(source, "subgraph " + source + " [" + source + "]", NodeType.SUBPROCESS, source, RawShape.SUBPROCESS, l);
                         this.nodes.put(sourceKey, n);
                     }
                 }
@@ -164,7 +162,7 @@ public class MermaidParser {
                     targetKey = target + ":" + "subprocess";
                     if (!this.nodes.containsKey(targetKey)) {
                         String l = subs.isEmpty() ? null : subs.peek();
-                        Node n = new Node(target, "subgraph " + source +" [" + source +"]", NodeType.SUBPROCESS, source, RawShape.SUBPROCESS, l);
+                        Node n = new Node(target, "subgraph " + source + " [" + source + "]", NodeType.SUBPROCESS, source, RawShape.SUBPROCESS, l);
                         this.nodes.put(targetKey, n);
                     }
                 }
@@ -182,24 +180,9 @@ public class MermaidParser {
 
             } else {
                 // throw exceptions for invalid lines
-                // TODO
+                throw new Exception("Unrecognized line '" + line + "' is neither a node declaration, an edge nor a subgraph construct.");
             }
         }
-
-        // TODO: find all nodes in original file
-        //  1. id:type:shape+label
-        //  2. (subprocess) subgraph id [subprocess-label]
-
-        // TODO: id:type should be considered at the same time and label can be updated
-
-
-        // TODO: nodes should be located to an exact process (String processId)
-        //  but need to think about how to name main process
-        // TODO: subprocess with list/queue/other possibilities
-
-        // TODO: find all edge
-        //  this happens after generating nodeList
-        //  since we
 
     }
 
@@ -248,7 +231,7 @@ public class MermaidParser {
             rawShape = RawShape.STARTEVENT;
             label = shape.substring(2, shape.length() - 2);
         } else if (shape.startsWith("(")) {
-            rawShape = RawShape.TASKORSUB;
+            rawShape = RawShape.TASK;
             label = shape.substring(1, shape.length() - 1);
         } else if (shape.startsWith("{")) {
             rawShape = RawShape.GATEWAY;
@@ -259,6 +242,10 @@ public class MermaidParser {
             label = shape;
         }
 
+        if (type == NodeType.SUBPROCESS) {
+            rawShape = RawShape.SUBPROCESS;
+        }
+
         String key = id + ":" + type.name().toLowerCase();
 
         updateNode(subs, key, id, nodeLine, type, label, rawShape);
@@ -266,25 +253,6 @@ public class MermaidParser {
         return this.nodes.get(key);
     }
 
-//    private RawShape parseRawShape(String shape) {
-//        // can I just make assumptions: we don't make mistakes here
-//        if (shape.startsWith("(((")) {
-//            return RawShape.ENDEVENT;
-//            // label = shape.substring(2, shape.length() - 2);
-//        } else if (shape.startsWith("((")) {
-//            return RawShape.STARTEVENT;
-//            // label = shape.substring(1, shape.length() - 1);
-//        } else if (shape.startsWith("(")) {
-//            return RawShape.TASKORSUB;
-//            // label = shape.substring(1, shape.length() - 1);
-//        } else if (shape.startsWith("{")) {
-//            return RawShape.GATEWAY;
-//            // label = shape.substring(1, shape.length() - 1);
-//        } else {
-//            return RawShape.UNKNOWN;
-//            // label = shape;
-//        }
-//    }
 
     private NodeType parseNodeType(String t) {
         return switch (t) {

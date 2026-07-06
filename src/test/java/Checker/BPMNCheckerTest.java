@@ -180,8 +180,8 @@ public class BPMNCheckerTest {
 //    }
 
     @Test
-    void testOR02() throws Exception {
-        BPMNChecker checker = check("6. OR Gateway Errors [OR]", "OR-02: Missing Condition on OR Outgoing Flow");
+    void testOR01() throws Exception {
+        BPMNChecker checker = check("6. OR Gateway Errors [OR]", "OR-01: Missing Condition on OR Outgoing Flow");
         assertTrue(hasError(checker, "OR-01"));
     }
 
@@ -221,4 +221,7 @@ public class BPMNCheckerTest {
 
     // LOOP 1-2
     // TODO
+
+
+
 }

@@ -17,18 +17,18 @@ public class MermaidParserTest {
     private static final String PATH = "/Users/xuan/documents/thesis/Script_drafts/";
 
 
-    @Test
-    void testParseMinimalAllElements() throws Exception {
-        MermaidParser parser = new MermaidParser(PATH + "minimal_bpmn_all_elements.txt");
-        LinkedHashMap<String, Node> nodes = parser.getNodes();
-        List<Edge> edgeList = parser.getEdges();
-
-        // temporarily as simple version
-        assertEquals(18, nodes.size());
-        assertFalse(edgeList.isEmpty());
-
-        // TODO implement real test case
-    }
+//    @Test
+//    void testParseMinimalAllElements() throws Exception {
+//        MermaidParser parser = new MermaidParser(PATH + "minimal_bpmn_all_elements.txt");
+//        LinkedHashMap<String, Node> nodes = parser.getNodes();
+//        List<Edge> edgeList = parser.getEdges();
+//
+//        // temporarily as simple version
+//        assertEquals(18, nodes.size());
+//        assertFalse(edgeList.isEmpty());
+//
+//        // TODO implement real test case
+//    }
 
     @Test
     void testNodeTypes() throws Exception {

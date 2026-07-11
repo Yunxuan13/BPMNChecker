@@ -3,6 +3,7 @@ package org.example.reporter;
 import org.example.Main;
 import org.example.model.*;
 import org.example.parser.MermaidParser;
+import org.example.repair.SuggestionBuilder;
 
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -23,29 +24,25 @@ public class JsonReporter {
 
         int errorCount = 0;
         int warningCount = 0;
-        int infoCount = 0;
+        // int infoCount = 0;
 
         for (BPMNError error : errorList) {
             if (error.getSeverity() == Severity.ERROR) {
                 errorCount++;
-            } else if (error.getSeverity() == Severity.WARNING){
-                warningCount++;
             } else {
-                // for new LBL02, if not X/O/AND
-                // according to prompt
-                infoCount++;
+                warningCount++;
             }
 
             JsonIssue issue = new JsonIssue();
             issue.setErrorId(error.getErrorId());
             issue.setErrorName(error.getErrorName());
             issue.setCategory(error.getErrorCategory());
-            issue.setSeverity(error.getSeverity().name());
+            issue.setSeverity(error.getSeverity().name().toLowerCase());
             issue.setScope(convertScope(error.getScope()));
 
             issue.setMessage(error.getMessage());
-            // TODO add attribute suggestion
-            issue.setSuggestion(null);
+
+            issue.setSuggestion(SuggestionBuilder.suggest(error));
 
             List<JsonNode> involvedNodes = getJsonNodes(error);
             issue.setInvolvedNodes(involvedNodes);
@@ -59,7 +56,7 @@ public class JsonReporter {
         }
         this.meta.setErrorCount(errorCount);
         this.meta.setWarningCount(warningCount);
-        this.meta.setInfoCount(infoCount);
+        // this.meta.setInfoCount(infoCount);
 
         this.meta.setTotalIssues(this.issues.size());
     }
@@ -68,8 +65,8 @@ public class JsonReporter {
         List<JsonEdge> errorEdges = new ArrayList<>();
         for (Edge edge : error.getEdges()) {
             JsonEdge e = new JsonEdge();
-            e.setSourceKey(edge.getSourceKey());
-            e.setTargetKey(edge.getTargetKey());
+            e.setSource(edge.getSourceKey());
+            e.setTarget(edge.getTargetKey());
             e.setCondition(edge.getCondition());
             errorEdges.add(e);
         }
@@ -83,7 +80,7 @@ public class JsonReporter {
             n.setKey(node.getKey());
             n.setLabel(node.getLabel());
             n.setType(node.getType().name().toLowerCase());
-            n.setLocation(node.getLocation());
+            n.setSubprocess(node.getLocation());
             List<String> roles = new ArrayList<>();
             for (Role role : node.getRoles()) {
                 roles.add(role.name().toLowerCase());

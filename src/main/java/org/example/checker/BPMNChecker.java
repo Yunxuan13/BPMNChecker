@@ -1055,6 +1055,12 @@ public class BPMNChecker {
     public void subEmptySubprocess() {
         for (Node node : nodes.values()) {
             if (node.getType() == NodeType.SUBPROCESS) {
+
+                // do not check this error for id:subprocess:(xxx)
+                if (!node.isExpandedSubprocess()){
+                    continue;
+                }
+
                 String subId = node.getId();
 
                 boolean exist = false;

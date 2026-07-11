@@ -13,6 +13,7 @@ public class Node {
     private String label;
     private final RawShape rawShape;
     private boolean isGateway = false;
+    private boolean expandedSubprocess = false;
     // main process or any subprocess
     private String location;
     private List<Edge> incomingEdges;
@@ -104,5 +105,13 @@ public class Node {
 
     public void setOutgoingEdges(List<Edge> outgoingEdges) {
         this.outgoingEdges = outgoingEdges;
+    }
+
+    public boolean isExpandedSubprocess() {
+        return expandedSubprocess;
+    }
+
+    public void setExpandedSubprocess(boolean expandedSubprocess) {
+        this.expandedSubprocess = expandedSubprocess;
     }
 }

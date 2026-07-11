@@ -10,20 +10,11 @@ public class JsonMeta {
 
     private int errorCount;
     private int warningCount;
-    private int infoCount;
+    // private int infoCount;
 
     private int totalIssues;
 
-//    public JsonMeta(String file, String timestamp, int nodeCount, int edgeCount) {
-//        this.file = file;
-//        this.timestamp = timestamp;
-//        this.nodeCount = nodeCount;
-//        this.edgeCount = edgeCount;
-//        this.errorCount = 0;
-//        this.warningCount = 0;
-//        this.infoCount = 0;
-//        this.totalIssues = 0;
-//    }
+
 
     public String getFile() {
         return file;
@@ -49,10 +40,6 @@ public class JsonMeta {
         return warningCount;
     }
 
-    public int getInfoCount() {
-        return infoCount;
-    }
-
     public int getTotalIssues() {
         return totalIssues;
     }
@@ -63,10 +50,6 @@ public class JsonMeta {
 
     public void setWarningCount(int warningCount) {
         this.warningCount = warningCount;
-    }
-
-    public void setInfoCount(int infoCount) {
-        this.infoCount = infoCount;
     }
 
     public void setTotalIssues(int totalIssues) {

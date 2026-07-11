@@ -2,34 +2,30 @@ package org.example.reporter;
 
 public class JsonEdge {
 
-    private String sourceKey;
-    private String targetKey;
+    private String source;
+    private String target;
     private String condition;
 
-//    public JsonEdge(String sourceKey, String targetKey, String condition) {
-//        this.sourceKey = sourceKey;
-//        this.targetKey = targetKey;
-//        this.condition = condition;
-//    }
 
-    public String getSourceKey() {
-        return sourceKey;
+
+    public String getSource() {
+        return source;
     }
 
-    public String getTargetKey() {
-        return targetKey;
+    public String getTarget() {
+        return target;
     }
 
     public String getCondition() {
         return condition;
     }
 
-    public void setSourceKey(String sourceKey) {
-        this.sourceKey = sourceKey;
+    public void setSource(String sourceKey) {
+        this.source = source;
     }
 
-    public void setTargetKey(String targetKey) {
-        this.targetKey = targetKey;
+    public void setTarget(String targetKey) {
+        this.target = target;
     }
 
     public void setCondition(String condition) {

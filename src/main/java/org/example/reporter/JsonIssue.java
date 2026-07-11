@@ -18,17 +18,6 @@ public class JsonIssue {
     private List<JsonNode> involvedNodes = new ArrayList<>();
     private List<JsonEdge> involvedEdges = new ArrayList<>();
 
-//    public JsonIssue(String errorId, String errorName, String category, String severity, String scope, String message, String suggestion, List<JsonNode> errorNodes, List<JsonEdge> errorEdges) {
-//        this.errorId = errorId;
-//        this.errorName = errorName;
-//        this.category = category;
-//        this.scope = scope;
-//        this.severity = severity;
-//        this.message = message;
-//        this.suggestion = suggestion;
-//        this.errorNodes = new ArrayList<>();
-//        this.errorEdges = new ArrayList<>();
-//    }
 
     public String getErrorId() {
         return errorId;

@@ -44,6 +44,20 @@ public class MermaidParser {
         // 应该先检查身处何处，再加入新的subprocess
         Deque<String> subs = new ArrayDeque<>();
 
+        // for situation like /Users/xuan/Documents/thesis/llm-generated-mermaid-models/gpt-4o/mad150/project_management_process_3.txt
+        // register all subgraph "id", if not in this situation:
+        // like 1 --> 2 parse error/throw exception
+        Set<String> subgraphIds = new HashSet<>();
+
+        for (String rawLine : lines) {
+            String line = rawLine.strip();
+            if (this.isSubgraph(line)) {
+                String info = line.substring(8).strip();
+                int sp = info.indexOf(" ");
+                subgraphIds.add(sp == -1 ? info : info.substring(0, sp));
+            }
+        }
+
         for (String rawLine : lines) {
             String line = rawLine.strip();
 
@@ -70,39 +84,8 @@ public class MermaidParser {
                 RawShape rawShape = RawShape.SUBPROCESS;
                 String location;
 
-                // TODO 如果嵌套自己则throw error
-
                 this.updateNode(subs, key, subId, line, type, subLabel, rawShape);
-
-//                Node node;
-//                if (this.nodes.containsKey(key)) {
-//                    node = nodes.get(key);
-//                    node.setLabel(subLabel);
-//                    String currentLocation = node.getLocation();
-//
-//                        // case already in a subprocess
-//                        // do not update location
-//                        // update anyway, otherwise we still need to use if ()
-//
-//
-//                    if (currentLocation != null && subs.contains(currentLocation)) {
-//                        node.setLocation(subs.peek());
-//                    }
-//
-//
-//
-////                    else {
-////                        // case in main process
-////                        // direct update
-////
-////                    }
-//
-//
-//                } else {
-//                    location = subs.isEmpty() ? null : subs.peek();
-//                    node = new Node(subId, line, type, subLabel, rawShape, location);
-//                    this.nodes.put(key, node);
-//                }
+                this.nodes.get(key).setExpandedSubprocess(true);
 
                 subs.push(subId);
 
@@ -143,29 +126,9 @@ public class MermaidParser {
                 // version 1: we simply consider, that there will only be either nodes or subprocess-id
                 // other situation (e.g. include space or some illegal situation) can temporarily be ignored
                 // situation of subprocess-name will not be considered here
-                if (this.isNode(source)) {
-                    Node n = this.parseNode(source, subs);
-                    sourceKey = n.getKey();
-                } else {
-                    // TODO
-                    sourceKey = source + ":" + "subprocess";
-                    if (!this.nodes.containsKey(sourceKey)) {
-                        String l = subs.isEmpty() ? null : subs.peek();
-                        Node n = new Node(source, "subgraph " + source + " [" + source + "]", NodeType.SUBPROCESS, source, RawShape.SUBPROCESS, l);
-                        this.nodes.put(sourceKey, n);
-                    }
-                }
-                if (this.isNode(target)) {
-                    Node n = this.parseNode(target, subs);
-                    targetKey = n.getKey();
-                } else {
-                    targetKey = target + ":" + "subprocess";
-                    if (!this.nodes.containsKey(targetKey)) {
-                        String l = subs.isEmpty() ? null : subs.peek();
-                        Node n = new Node(target, "subgraph " + source + " [" + source + "]", NodeType.SUBPROCESS, source, RawShape.SUBPROCESS, l);
-                        this.nodes.put(targetKey, n);
-                    }
-                }
+
+                sourceKey = this.resolveEndpoint(source, subs, subgraphIds, line);
+                targetKey = this.resolveEndpoint(target, subs, subgraphIds, line);
 
                 // generate edge
                 // public Edge(String sourceKey, String condition, String targetKey)
@@ -184,6 +147,16 @@ public class MermaidParser {
             }
         }
 
+    }
+
+    private String resolveEndpoint(String node, Deque<String> subs, Set<String> subgraphIds, String line) throws Exception {
+        if (this.isNode(node)) {
+            return this.parseNode(node, subs).getKey();
+        }
+        if (!subgraphIds.contains(node)) {
+            throw new Exception("Line \"" + line + "\": invalid node registration");
+        }
+        return node + ":" + "subprocess";
     }
 
     // single node?

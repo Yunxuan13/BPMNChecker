@@ -7,7 +7,7 @@ public class JsonNode {
     private String key;
     private String label;
     private String type;
-    private String location;
+    private String subprocess;
     private List<String> roles = new ArrayList<>();
 
     public String getKey() {
@@ -34,12 +34,12 @@ public class JsonNode {
         this.type = type;
     }
 
-    public String getLocation() {
-        return location;
+    public String getSubprocess() {
+        return subprocess;
     }
 
-    public void setLocation(String location) {
-        this.location = location;
+    public void setSubprocess(String subprocess) {
+        this.subprocess = subprocess;
     }
 
     public List<String> getRoles() {

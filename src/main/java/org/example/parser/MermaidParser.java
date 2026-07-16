@@ -22,6 +22,9 @@ public class MermaidParser {
     private List<Subprocess> subprocesses;
     private List<ProcessGraph> processes;
 
+    //
+    private int currentInnerSubId = 0;
+
 
     public MermaidParser(String mermaidPath) throws Exception {
         this.nodes = new LinkedHashMap<>();
@@ -30,8 +33,10 @@ public class MermaidParser {
         this.processes = new ArrayList<>();
         try {
             this.parse(mermaidPath);
+        } catch (InputValidationException e) {
+            throw e;
         } catch (Exception e) {
-            throw new Exception("Failed to parse Mermaid file '" + mermaidPath + "': " +e.getMessage(), e);
+            throw new Exception("Failed to parse Mermaid file '" + mermaidPath + "': " + e.getMessage(), e);
         }
 
     }
@@ -42,6 +47,8 @@ public class MermaidParser {
 
         // TODO：node（包括subprocess）都应该出现在“最内层” 应加上nodeDepth，若同层则不更新location，若更深层则更新最内层的位置
         // 应该先检查身处何处，再加入新的subprocess
+
+        // TODO search: whether deque can have duplicate
         Deque<String> subs = new ArrayDeque<>();
 
         // for situation like /Users/xuan/Documents/thesis/llm-generated-mermaid-models/gpt-4o/mad150/project_management_process_3.txt
@@ -52,9 +59,7 @@ public class MermaidParser {
         for (String rawLine : lines) {
             String line = rawLine.strip();
             if (this.isSubgraph(line)) {
-                String info = line.substring(8).strip();
-                int sp = info.indexOf(" ");
-                subgraphIds.add(sp == -1 ? info : info.substring(0, sp));
+                subgraphIds.add(this.getSubgraphId(line));
             }
         }
 
@@ -71,23 +76,32 @@ public class MermaidParser {
 
                 // e.g. subgraph subId [subgraph-label]
                 // (with space instead of ":")
+                // ！！not only this type
+                // but subgraph apple / subgraph apple banana / subgraph apple [banana orange] / subgraph apple[banana]
+
                 // subgraph should also be considered as a node for using
-                String info = line.substring(8).strip();
-                String subId = info.substring(0, info.indexOf(" "));
+                String subId = this.getSubgraphId(line);
 
                 // in mermaid, if a sentence begins with a "subgraph", the shape must be [], otherwise there will be syntax-error
-                String subLabel = info.substring(info.indexOf("[") + 1, info.indexOf("]"));
+                String subLabel = this.getSubgraphLabel(line);
+
+                if (subId.isEmpty()) {
+                    throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Subgraph line '" + line + "' does not have an id. This file was not structurally analyzed.");
+                }
 
                 //public Node(String id, String fullName, NodeType type, String label, String rawShape, String location)
                 NodeType type = NodeType.SUBPROCESS;
                 String key = subId + ":subprocess";
                 RawShape rawShape = RawShape.SUBPROCESS;
-                String location;
+                // String location;
 
                 this.updateNode(subs, key, subId, line, type, subLabel, rawShape);
                 this.nodes.get(key).setExpandedSubprocess(true);
 
+                // TODO subs should work for subgraph--End block
+                //  Due to the same-id problem, this cant work for naming location
                 subs.push(subId);
+                currentInnerSubId++;
 
             } else if (this.isSubgraphEnd(line)) {
 
@@ -141,22 +155,72 @@ public class MermaidParser {
                 // id:type:shape
                 this.parseNode(line, subs);
 
+            } else if (this.isNumericId(line)) {
+                throw new InputValidationException(Reason.NON_NUMERIC_BPMN_NODE_ID, "The ID of a node in non-numeric ("+ line + ") is out of scope, this file was not structurally analyzed.");
             } else {
                 // throw exceptions for invalid lines
                 throw new Exception("Unrecognized line '" + line + "' is neither a node declaration, an edge nor a subgraph construct.");
             }
         }
 
+        if (!subs.isEmpty()) {
+            throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "At least one subgraph block is not closed. The file was not structurally analyzed.");
+        }
+
     }
 
-    private String resolveEndpoint(String node, Deque<String> subs, Set<String> subgraphIds, String line) throws Exception {
+    private String getSubgraphId(String line) throws InputValidationException {
+        String info = line.substring(8).strip();
+
+        int labelBegin = info.indexOf("[");
+        int labelEnd = info.lastIndexOf("]");
+
+        if (this.hasLabelBlock(labelBegin, labelEnd)) {
+            String middle = info.substring(0, labelBegin).strip();
+            if (middle.contains(" ")) {
+                throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "The subgraph id of line '"+ line + "' contains a space which cannot be connected by a sequence flow, this file was not structurally analyzed.");
+            } else {
+                return middle;
+            }
+        } else {
+            if (info.contains(" ")) {
+                return "subGraph" + currentInnerSubId;
+            } else {
+                return info;
+            }
+        }
+
+    }
+
+    private boolean hasLabelBlock(int begin, int end) {
+        return begin != -1 && end != -1 && end > begin;
+    }
+
+    private String getSubgraphLabel(String line) throws InputValidationException {
+        String info = line.substring(8).strip();
+        int labelBegin = info.indexOf("[");
+        int labelEnd = info.lastIndexOf("]");
+
+        if (hasLabelBlock(labelBegin, labelEnd)) {
+            return info.substring(labelBegin + 1, labelEnd).strip();
+        } else {
+            return info;
+        }
+    }
+
+
+
+    private String resolveEndpoint(String node, Deque<String> subs, Set<String> subgraphIds, String line) throws InputValidationException {
         if (this.isNode(node)) {
             return this.parseNode(node, subs).getKey();
         }
-        if (!subgraphIds.contains(node)) {
-            throw new Exception("Line \"" + line + "\": invalid node registration");
+        if (subgraphIds.contains(node)) {
+            return node + ":" + "subprocess";
         }
-        return node + ":" + "subprocess";
+        if (this.isNumericId(node)) {
+            throw new InputValidationException(Reason.NON_NUMERIC_BPMN_NODE_ID, "The ID of a node in non-numeric ("+ line + ") is out of scope, this file was not structurally analyzed.");
+        }
+        throw new InputValidationException(Reason.BARE_ID_PROBLEM, "Bare-ID node in Edge ("+ line + ") is out of scope, this file was not structurally analyzed.");
     }
 
     // single node?
@@ -164,11 +228,20 @@ public class MermaidParser {
         return a.matches("\\d+:\\w+:.*") && !this.isEdge(a);
     }
 
+    // test type as gtw3:exclusivegateway:{x} (NON_NUMERIC_BPMN_NODE_ID)
+    private boolean isNumericId(String a) {
+        return a.matches("\\w+:\\w+:.*") && !this.isEdge(a);
+    }
+
+
     // edge?
     private boolean isEdge(String a) {
         return a.contains("-->");
     }
 
+    // TODO no start with does not mean it is 100% a valid subgraph
+    // this is actually "should be parsed as a possible subgraph"
+    // i am not trying to add anything complex here, whether there is something violated, decided by further checking
     private boolean isSubgraph(String a) {
         return a.startsWith("subgraph");
     }

@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.example.checker.BPMNChecker;
 import org.example.model.*;
+import org.example.parser.InputValidationException;
 import org.example.parser.MermaidParser;
 import org.example.reporter.JsonIssue;
 import org.example.reporter.JsonNode;
@@ -21,6 +22,8 @@ import java.util.List;
 public class Main {
 
     private static final String[] DATASETS = {"domains", "mad150", "pet", "realset", "sapsam"};
+    private static final int PROCESSING_FAILED = -1;
+    private static final int INPUT_NOT_SUPPORTED = -2;
 
     public static void main(String[] args) {
 
@@ -50,8 +53,14 @@ public class Main {
         try {
             JsonReporter reporter = check(path);
             System.out.println(getJsonForm(reporter));
-        } catch (Exception e) {
-            System.out.println("Failed to deal with " + path + ": " + e.getMessage());
+        } catch (InputValidationException e) {
+            System.err.println("Input not supported by the structural checker for [" + e.getReason() + "]: " + e.getMessage());
+            // =/= normal exception 1
+            System.exit(2);
+        }
+
+        catch (Exception e) {
+            System.err.println("Failed to deal with " + path + ": " + e.getMessage());
             System.exit(1);
         }
     }
@@ -65,15 +74,16 @@ public class Main {
             return;
         }
 
-        outputFolder.mkdir();
+        outputFolder.mkdirs();
 
         int totalFiles = 0;
-        int parseFail = 0;
+        int unsupportedInputs = 0;
+        int processingFailed = 0;
         int clean = 0;
         int issues = 0;
 
         try {
-            File csvFile = new File(output, "results.csv");
+            File csvFile = new File(output, "result.csv");
             FileWriter csv = new FileWriter(csvFile);
 
             csv.write("dataset,file,errorId,severity,scope,nodes,message,human\n");
@@ -96,8 +106,10 @@ public class Main {
 
                     int result = processFile(csv, outputFolder, dataset, file);
 
-                    if (result < 0) {
-                        parseFail++;
+                    if (result == INPUT_NOT_SUPPORTED) {
+                        unsupportedInputs++;
+                    } else if (result == PROCESSING_FAILED) {
+                        processingFailed++;
                     } else if (result == 0) {
                         clean++;
                     } else {
@@ -116,7 +128,7 @@ public class Main {
             return;
         }
 
-        System.out.println("Finished. Total Number: " + totalFiles + ", Failed Number: " + parseFail + ", Clean Files: " + clean + ", Total issues: " + issues +  ".");
+        System.out.println("Finished. Total Number: " + totalFiles + ", Unsupported files Number: " + unsupportedInputs + ", Processing failures: " + processingFailed + ", Clean Files: " + clean + ", Total issues: " + issues +  ".");
     }
 
     // number of detected issues or -1 for failed parsed
@@ -128,13 +140,16 @@ public class Main {
 
         try {
             reporter = check(file.getPath());
+        } catch (InputValidationException e) {
+            csv.write(row(dataset, name, "INPUT_NOT_SUPPORTED", "", "", "", e.getReason().name(), "") + "\n");
+            return INPUT_NOT_SUPPORTED;
         } catch (Exception e) {
-            csv.write(row(dataset, name, "PARSE_FAILED", "","","",e.getMessage(),"") + "\n");
-            return -1;
+            csv.write(row(dataset, name, "PROCESSING_FAILED", "","","",e.getMessage(),"") + "\n");
+            return PROCESSING_FAILED;
         }
 
         File jsonFile = new File(new File(outputFolder, dataset), name.replace(".txt", ".json"));
-        jsonFile.getParentFile().mkdir();
+        jsonFile.getParentFile().mkdirs();
 
         FileWriter writer = new FileWriter(jsonFile);
         writer.write(getJsonForm(reporter));

@@ -21,11 +21,11 @@ public class JsonEdge {
     }
 
     public void setSource(String sourceKey) {
-        this.source = source;
+        this.source = sourceKey;
     }
 
     public void setTarget(String targetKey) {
-        this.target = target;
+        this.target = targetKey;
     }
 
     public void setCondition(String condition) {

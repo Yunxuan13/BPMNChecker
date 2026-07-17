@@ -653,18 +653,22 @@ public class BPMNChecker {
 
 
     public void gtwNestingViolation() {
-        // TODO
+
         for (List<Node> nodeList : this.scopeNodes.values()) {
+
             Set<Edge> loopEdges = this.getLoopEdges(nodeList);
             String scope = this.getScope(nodeList.get(0));
 
             for (Node node : nodeList) {
                 // find split gateway first
                 if (node.isGateway() && this.isSplit(node, loopEdges)) {
+
                     Set<String> joinKeys = new HashSet<>();
                     List<Node> joinNodes = new ArrayList<>();
 
+                    // for algorithm-vereinfachung --> not consider loop edges from graph
                     for (Edge edge : node.getOutgoingEdges()) {
+
                         if (loopEdges.contains(edge)) {
                             continue;
                         }
@@ -684,9 +688,11 @@ public class BPMNChecker {
 
                     // different branches merged at more than one gateway
                     if (joinKeys.size() > 1) {
+
                         List<Node> errorNodes = new ArrayList<>();
                         errorNodes.add(node);
                         errorNodes.addAll(joinNodes);
+
                         List<Edge> errorEdges = new ArrayList<>();
 
                         BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation",
@@ -720,15 +726,18 @@ public class BPMNChecker {
     }
 
     public void gtwRedundant() {
+
         for (Node node : nodes.values()) {
 
             List<Node> errorNodes = new ArrayList<>();
             List<Edge> errorEdges = new ArrayList<>();
             String scope = this.getScope(node);
 
-            if (node.isGateway() &&
-                    node.getIncomingEdges().size() == 1 && node.getOutgoingEdges().size() == 1) {
+            if (node.isGateway() && node.getIncomingEdges().size() == 1
+                    && node.getOutgoingEdges().size() == 1) {
+
                 errorNodes.add(node);
+
                 errorEdges.addAll(node.getOutgoingEdges());
                 errorEdges.addAll(node.getIncomingEdges());
 
@@ -741,31 +750,20 @@ public class BPMNChecker {
         }
     }
 
-//    // XOR
-//    public void xorMultipleRoles() {
-//        for (Node node : nodes.values()) {
-//            if (node.getType() == NodeType.EXCLUSIVEGATEWAY && node.getIncomingEdges().size() > 1 && node.getOutgoingEdges().size() > 1) {
-//                String scope = this.getScope(node);
-//                List<Node> errorNodes = new ArrayList<>();
-//                List<Edge> errorEdges = new ArrayList<>();
-//                errorNodes.add(node);
-//
-//                BPMNError error = new BPMNError("XOR-01", "XOR Gateway Used as Both Split and Join",
-//                        "XOR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
-//                errorList.add(error);
-//            }
-//        }
-//
-//    }
-
     public void xorMissingCondition() {
+
         for (Node node : nodes.values()) {
+
             if (node.getType() == NodeType.EXCLUSIVEGATEWAY) {
+
                 String scope = this.getScope(node);
+
                 List<Node> errorNode = new ArrayList<>();
+
                 List<Edge> without = new ArrayList<>();
+
                 int conditionNum = 0;
-                // List<Edge> invalid = new ArrayList<>();
+
                 for (Edge edge : node.getOutgoingEdges()) {
                     if (edge.getCondition() != null && !edge.getCondition().isEmpty()) {
                         conditionNum++;
@@ -773,23 +771,30 @@ public class BPMNChecker {
                         without.add(edge);
                     }
                 }
+
                 if (conditionNum < node.getOutgoingEdges().size() - 1) {
+
                     errorNode.add(node);
+
                     List<Edge> errorEdge = new ArrayList<>(without);
+
                     BPMNError error = new BPMNError("XOR-01", "Missing Condition on XOR Outgoing Flow",
                             "XOR Gateway Errors", scope,
                             "XOR gateway '" + node.getKey() + "' has " + without.size() +
                                     " outgoing flow(s) without a condition (at most one default flow is allowed).",
                             errorNode, errorEdge, Severity.ERROR);
+
                     errorList.add(error);
                 }
             }
         }
     }
 
+
     public void andMismatch() {
 
         for (List<Node> nodeList : this.scopeNodes.values()) {
+
             Set<Edge> loopEdges = this.getLoopEdges(nodeList);
             String scope = this.getScope(nodeList.get(0));
 
@@ -830,6 +835,7 @@ public class BPMNChecker {
 
                 // all and split gateway endlich merged at only one node(and node)
                 if (reached.size() == 1) {
+
                     Node join = reached.keySet().iterator().next();
                     int hit = reached.get(join);
 
@@ -851,6 +857,7 @@ public class BPMNChecker {
                 errorNodes.addAll(reached.keySet());
 
                 List<Edge> errorEdges = new ArrayList<>();
+
                 BPMNError error = new BPMNError("AND-01", "AND Split and Join Branch Count Mismatch",
                         "AND Gateway Errors", scope,
                         "Branches of AND split '" + node.getKey() + "' do not synchronize at a single matching AND join.",
@@ -872,19 +879,25 @@ public class BPMNChecker {
 
 
     public void orMissingCondition() {
+
         for (Node node : nodes.values()) {
+
             if (node.getType() == NodeType.INCLUSIVEGATEWAY) {
+
                 int conditionNum = 0;
                 List<Edge> without = new ArrayList<>();
 
                 // List<Edge> invalid = new ArrayList<>();
                 for (Edge edge : node.getOutgoingEdges()) {
+
                     if (edge.getCondition() != null && !edge.getCondition().isEmpty()) {
                         conditionNum++;
                     } else {
                         without.add(edge);
+
                     }
                 }
+
                 if (conditionNum < node.getOutgoingEdges().size() - 1) {
 
                     String scope = this.getScope(node);
@@ -898,6 +911,7 @@ public class BPMNChecker {
                             "OR Gateway Errors", scope,
                             "OR gateway '" + node.getKey() + "' has " + without.size() + " outgoing flow(s) without a condition (at most one default flow is allowed).",
                             errorNodes, errorEdges, Severity.ERROR);
+
                     errorList.add(error);
                 }
             }
@@ -933,6 +947,7 @@ public class BPMNChecker {
 
     public void subBoundaryViolation() {
         for (Edge edge : edges) {
+
             Node source = nodes.get(edge.getSourceKey());
             Node target = nodes.get(edge.getTargetKey());
 
@@ -971,9 +986,11 @@ public class BPMNChecker {
         LinkedHashMap<String, List<Node>> labelNodes = new LinkedHashMap<>();
 
         for (Node node : nodes.values()) {
+
             if (node.getType() == NodeType.TASK) {
                 String label = node.getLabel();
                 if (label != null && !label.isEmpty() && !label.isBlank()) {
+
                     if (!labelNodes.containsKey(label)) {
                         List<Node> nodeList = new ArrayList<>();
                         nodeList.add(node);
@@ -997,42 +1014,15 @@ public class BPMNChecker {
                         "Label Errors", "global",
                         "Task label '" + ln.get(0).getLabel() + "' is used by " + ln.size() + " different tasks.",
                         errorNodes, errorEdges, Severity.WARNING);
+
                 errorList.add(error);
             }
         }
     }
 
-//    public void lblGatewayNamingError() {
-//        for (Node node : nodes.values()) {
-//            String expected = null;
-//            if (node.getType() == NodeType.EXCLUSIVEGATEWAY) {
-//                expected = "x";
-//            } else if (node.getType() == NodeType.PARALLELGATEWAY) {
-//                expected = "AND";
-//            } else if (node.getType() == NodeType.INCLUSIVEGATEWAY) {
-//                expected = "O";
-//            }
-//
-//            if (expected == null) {
-//                continue;
-//            }
-//
-//            String actual = node.getLabel();
-//
-//            if (actual != null && !actual.equals(expected)) {
-//                String scope = this.getScope(node);
-//                List<Node> errorNodes = new ArrayList<>();
-//                errorNodes.add(node);
-//                List<Edge> errorEdges = new ArrayList<>();
-//                BPMNError error = new BPMNError("LBL-02", "Non-Standard Gateway Shape Label",
-//                        "Label Errors", scope, "", errorNodes, errorEdges, Severity.INFO);
-//                errorList.add(error);
-//            }
-//        }
-//    }
-
     // EDGE
     public void edgeDuplicateFlow() {
+
         LinkedHashMap<EdgePair, List<Edge>> sameEdge = new LinkedHashMap<>();
 
         for (Edge edge : edges) {
@@ -1074,6 +1064,7 @@ public class BPMNChecker {
                         "Edge Errors", scope,
                         errorEdges.size() + " sequence flows connect '" + errorEdges.get(0).getSourceKey() + "' to '" + errorEdges.get(0).getTargetKey() + "' (redundant: multiple flows to the same target add no routing effect).",
                         errorNodes, errorEdges, Severity.WARNING);
+
                 errorList.add(error);
             }
         }
@@ -1100,6 +1091,7 @@ public class BPMNChecker {
     // LOOP
     public void loopWithoutReachableEnd() {
         // in a loop, it cant arrive at end event of this scope
+        // for one node, endevent is unreachable for it
         for (List<Node> nodeList : scopeNodes.values()) {
             boolean hasEndevent = false;
             for (Node n : nodeList) {
@@ -1165,6 +1157,7 @@ public class BPMNChecker {
 
     // and cant be as loop control gateway
     public void loopInvalidGateway() {
+
         for (List<Node> nodeList : scopeNodes.values()) {
             Set<Edge> loopEdges = this.getLoopEdges(nodeList);
             String scope = this.getScope(nodeList.get(0));
@@ -1231,12 +1224,6 @@ public class BPMNChecker {
 
         return count > 1;
     }
-
-
-
-
-
-
 
 
     public LinkedHashMap<String, Node> getNodes() {

@@ -48,7 +48,7 @@ public class MermaidParser {
         // TODO：node（包括subprocess）都应该出现在“最内层” 应加上nodeDepth，若同层则不更新location，若更深层则更新最内层的位置
         // 应该先检查身处何处，再加入新的subprocess
 
-        // TODO search: whether deque can have duplicate
+        // can contain same value
         Deque<String> subs = new ArrayDeque<>();
 
         // for situation like /Users/xuan/Documents/thesis/llm-generated-mermaid-models/gpt-4o/mad150/project_management_process_3.txt
@@ -58,6 +58,7 @@ public class MermaidParser {
 
         for (String rawLine : lines) {
             String line = rawLine.strip();
+            // here an invalid subgraph will not be added to the set due to getSubgraphId
             if (this.isSubgraph(line)) {
                 subgraphIds.add(this.getSubgraphId(line));
             }
@@ -69,7 +70,7 @@ public class MermaidParser {
             // no need to deal with graph TD/flowchart or something similar
             // ignore empty lines and comment lines
             // ignore direction
-            if (line.isEmpty() || line.startsWith("graph") || line.startsWith("flowchart") || line.startsWith("%%") || line.startsWith("direction")) {
+            if (line.isEmpty() || line.equals("graph LR") || line.startsWith("%%") || line.equals("direction TD") || line.equals("direction LR")) {
                 continue;
 
             } else if (this.isSubgraph(line)) {
@@ -80,19 +81,28 @@ public class MermaidParser {
                 // but subgraph apple / subgraph apple banana / subgraph apple [banana orange] / subgraph apple[banana]
 
                 // subgraph should also be considered as a node for using
+                // will throw exception if invalid
                 String subId = this.getSubgraphId(line);
 
                 // in mermaid, if a sentence begins with a "subgraph", the shape must be [], otherwise there will be syntax-error
-                String subLabel = this.getSubgraphLabel(line);
+                // if subId already be register, then the new label will not be updated to the node
+                // DONE 处理如果inline subprocess和expaned subprocess撞id的问题 maybe other name in second part like key = "<id>:subgraph"
+                String key = subId + ":subgraph";
+                String subLabel;
+                if (nodes.containsKey(key)) {
+                    subLabel = nodes.get(key).getLabel();
+                } else {
+                    subLabel = this.getSubgraphLabel(line);
+                }
 
                 if (subId.isEmpty()) {
                     throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Subgraph line '" + line + "' does not have an id. This file was not structurally analyzed.");
                 }
 
                 //public Node(String id, String fullName, NodeType type, String label, String rawShape, String location)
-                NodeType type = NodeType.SUBPROCESS;
-                String key = subId + ":subprocess";
-                RawShape rawShape = RawShape.SUBPROCESS;
+                NodeType type = NodeType.SUBGRAPH;
+                // String key = subId + ":subprocess";
+                RawShape rawShape = RawShape.SUBGRAPH;
                 // String location;
 
                 this.updateNode(subs, key, subId, line, type, subLabel, rawShape);
@@ -106,7 +116,7 @@ public class MermaidParser {
             } else if (this.isSubgraphEnd(line)) {
 
                 if (subs.isEmpty()) {
-                    throw new Exception("Unmatched 'end': no open subgraph block to close");
+                    throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Unmatched 'end': no open subgraph block to close. The file was not structurally analyzed.");
                 }
                 // end and only end
                 // pop current subprocess
@@ -155,11 +165,11 @@ public class MermaidParser {
                 // id:type:shape
                 this.parseNode(line, subs);
 
-            } else if (this.isNumericId(line)) {
+            } else if (this.isNonNumericId(line)) {
                 throw new InputValidationException(Reason.NON_NUMERIC_BPMN_NODE_ID, "The ID of a node in non-numeric ("+ line + ") is out of scope, this file was not structurally analyzed.");
             } else {
                 // throw exceptions for invalid lines
-                throw new Exception("Unrecognized line '" + line + "' is neither a node declaration, an edge nor a subgraph construct.");
+                throw new Exception("Unrecognized line '" + line + "' is neither a node declaration, an edge nor a subgraph construct. The file was not structurally analyzed.");
             }
         }
 
@@ -172,12 +182,18 @@ public class MermaidParser {
     private String getSubgraphId(String line) throws InputValidationException {
         String info = line.substring(8).strip();
 
+        // TODO after test on mermaid.live, if a label contains "[], (), {}, single ", @, |"
+        //  It will fail to parse in mermaid.live.
+        //  But it is difficult to consider all possible situation
+        //  Current decision: since it seems like, there are no file has those problems, we can try to set them free
+        //  --> do not catch any character
+
         int labelBegin = info.indexOf("[");
         int labelEnd = info.lastIndexOf("]");
 
         if (this.hasLabelBlock(labelBegin, labelEnd)) {
             String middle = info.substring(0, labelBegin).strip();
-            if (middle.contains(" ")) {
+            if (middle.contains(" ") || middle.isEmpty()) {
                 throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "The subgraph id of line '"+ line + "' contains a space which cannot be connected by a sequence flow, this file was not structurally analyzed.");
             } else {
                 return middle;
@@ -215,9 +231,10 @@ public class MermaidParser {
             return this.parseNode(node, subs).getKey();
         }
         if (subgraphIds.contains(node)) {
-            return node + ":" + "subprocess";
+            return node + ":" + "subgraph";
         }
-        if (this.isNumericId(node)) {
+
+        if (this.isNonNumericId(node)) {
             throw new InputValidationException(Reason.NON_NUMERIC_BPMN_NODE_ID, "The ID of a node in non-numeric ("+ line + ") is out of scope, this file was not structurally analyzed.");
         }
         throw new InputValidationException(Reason.BARE_ID_PROBLEM, "Bare-ID node in Edge ("+ line + ") is out of scope, this file was not structurally analyzed.");
@@ -225,17 +242,20 @@ public class MermaidParser {
 
     // single node?
     private boolean isNode(String a) {
+        // checking the validity of a node is currently not a work of this method.
+        // if true, this method will activate parseNode() anyway --> check there
         return a.matches("\\d+:\\w+:.*") && !this.isEdge(a);
     }
 
     // test type as gtw3:exclusivegateway:{x} (NON_NUMERIC_BPMN_NODE_ID)
-    private boolean isNumericId(String a) {
+    private boolean isNonNumericId(String a) {
         return a.matches("\\w+:\\w+:.*") && !this.isEdge(a);
     }
 
 
     // edge?
     private boolean isEdge(String a) {
+        // same as isNode(), this method is not responsible for checking the validity of an edge
         return a.contains("-->");
     }
 
@@ -251,7 +271,7 @@ public class MermaidParser {
     }
 
     // except SUBPROCESS
-    private Node parseNode(String nodeLine, Deque<String> subs) {
+    private Node parseNode(String nodeLine, Deque<String> subs) throws InputValidationException {
 
         // id:type:shape
         String[] seperated = nodeLine.split(":", 3);
@@ -262,35 +282,45 @@ public class MermaidParser {
         RawShape rawShape;
         String label;
 
-//        String location;
-//        if (subs.isEmpty()) {
-//            location = null;
-//        } else {
-//            location = subs.peek();
-//        }
-
-        // can I just make assumptions: we don't make mistakes here
-        if (shape.startsWith("(((")) {
+        // if type and shape dont match --> throw exception
+        if (shape.startsWith("(((") && shape.endsWith(")))")) {
             rawShape = RawShape.ENDEVENT;
+            if (!type.equals(NodeType.ENDEVENT)) {
+                throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Type and shape at this line: '" + nodeLine + "' do not match. The file was not structurally analyzed.");
+            }
             label = shape.substring(3, shape.length() - 3);
-        } else if (shape.startsWith("((")) {
+        } else if (shape.startsWith("((") && shape.endsWith("))")) {
             rawShape = RawShape.STARTEVENT;
+            if (!type.equals(NodeType.STARTEVENT)) {
+                throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Type and shape at this line: '" + nodeLine + "' do not match. The file was not structurally analyzed.");
+            }
             label = shape.substring(2, shape.length() - 2);
-        } else if (shape.startsWith("(")) {
-            rawShape = RawShape.TASK;
+        } else if (shape.startsWith("(") && shape.endsWith(")")) {
+            rawShape = RawShape.TASKORSUBPROCESS;
+            if (!(type.equals(NodeType.TASK) || type.equals(NodeType.SUBPROCESS))) {
+                throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Type and shape at this line: '" + nodeLine + "' do not match. The file was not structurally analyzed.");
+            }
             label = shape.substring(1, shape.length() - 1);
-        } else if (shape.startsWith("{")) {
+        } else if (shape.startsWith("{") && shape.endsWith("}")) {
             rawShape = RawShape.GATEWAY;
+            if (!(type.equals(NodeType.EXCLUSIVEGATEWAY) || type.equals(NodeType.INCLUSIVEGATEWAY) || type.equals(NodeType.PARALLELGATEWAY))) {
+                throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Type and shape at this line: '" + nodeLine + "' do not match. The file was not structurally analyzed.");
+            }
             label = shape.substring(1, shape.length() - 1);
-        }
-        else {
-            rawShape = RawShape.UNKNOWN;
-            label = shape;
         }
 
-        if (type == NodeType.SUBPROCESS) {
-            rawShape = RawShape.SUBPROCESS;
+        // situation here:
+        // 1. complete block but not defined shape like []
+        // 2. not a block at shape e.g. id:type:something random here, with space or with xxx but without a shape outside
+        else {
+            throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Maybe one/several of a shapes of nodes is/are out of scope in this checker (acceptable: '(...)', '((...))', '(((...)))', '{}') or the label(s) is(are) not encased. The file was not structurally analyzed.");
+
         }
+
+
+//        if (type == NodeType.SUBPROCESS) {
+//            rawShape = RawShape.SUBPROCESS;
+//        }
 
         String key = id + ":" + type.name().toLowerCase();
 
@@ -300,7 +330,7 @@ public class MermaidParser {
     }
 
 
-    private NodeType parseNodeType(String t) {
+    private NodeType parseNodeType(String t) throws InputValidationException {
         return switch (t) {
             case "startevent" -> NodeType.STARTEVENT;
             case "endevent" -> NodeType.ENDEVENT;
@@ -309,7 +339,8 @@ public class MermaidParser {
             case "inclusivegateway" -> NodeType.INCLUSIVEGATEWAY;
             case "parallelgateway" -> NodeType.PARALLELGATEWAY;
             case "subprocess" -> NodeType.SUBPROCESS;
-            default -> NodeType.UNKNOWN;
+            // case "subgraph" -> NodeType.SUBGRAPH will not appear here
+            default -> throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "This type appear unexpected. The file was not structurally analyzed.");
         };
     }
 

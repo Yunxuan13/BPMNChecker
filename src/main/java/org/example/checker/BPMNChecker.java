@@ -296,7 +296,6 @@ public class BPMNChecker {
     }
 
     // SE
-    // TODO need to consider main process and subprocesses
     public void seMissingStart() {
 
         for (List<Node> nodeList : scopeNodes.values()) {
@@ -593,28 +592,16 @@ public class BPMNChecker {
         return null;
     }
 
-//    private static class JoinMatch {
-//        private Node join;
-//        private int branchCount;
-//        private int merged;
-//
-//    }
-
 
     private Node strictMatchingJoin(Node split, Set<Edge> loopEdges) {
         String scope = this.getScope(split);
         Node target = null;
-        // branch number --> AND
-//        int reachedCount = 0;
-//        int branchCount = 0;
 
         for (Edge edge : split.getOutgoingEdges()) {
 
             if (loopEdges.contains(edge)) {
                 continue;
             }
-
-            // branchCount++;
 
             Node start = nodes.get(edge.getTargetKey());
             Node joinNode;
@@ -623,7 +610,6 @@ public class BPMNChecker {
             } else {
                 joinNode = this.branchJoin(start, scope, loopEdges);
             }
-            // Node joinNode = this.branchJoin(start, scope);
 
             if (joinNode == null) {
                 continue;
@@ -643,10 +629,6 @@ public class BPMNChecker {
             return null;
         }
 
-//        JoinMatch joinMatch = new JoinMatch();
-//        joinMatch.branchCount = branchCount;
-//        joinMatch.merged = reachedCount;
-//        joinMatch.join = target;
         return target;
     }
 

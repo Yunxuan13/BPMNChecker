@@ -18,7 +18,6 @@ public class BPMNChecker {
         this.nodes = parser.getNodes();
         this.edges = parser.getEdges();
         this.errorList = new ArrayList<>();
-        //this.scopeNodes = new LinkedHashMap<>();
 
         for (Node node : nodes.values()) {
             List<Edge> out = new ArrayList<>();
@@ -35,6 +34,7 @@ public class BPMNChecker {
             }
             node.setOutgoingEdges(out);
             node.setIncomingEdges(in);
+
             if (node.getIncomingEdges().size() > 1) {
                 roles.add(Role.MERGE);
             }
@@ -43,6 +43,7 @@ public class BPMNChecker {
             }
             node.setRoles(roles);
         }
+
         this.scopeNodes = new LinkedHashMap<>();
         for (Node node : nodes.values()) {
             String nodeScope = this.getScope(node);
@@ -54,6 +55,7 @@ public class BPMNChecker {
                 scopeNodes.get(nodeScope).add(node);
             }
         }
+
     }
 
     public void detectErrors() {
@@ -96,8 +98,7 @@ public class BPMNChecker {
         // this.orRedundant();
 
         // SUB
-        // TODO these cant be detected in the dataset because of the pre-definition in prompt
-        //  only id:subprocess:label as "empty subprocess"
+        // SUB-01 and 02 only check for subgraph not inline-subprocess
         this.subEmptySubprocess();
         this.subBoundaryViolation();
 
@@ -127,7 +128,7 @@ public class BPMNChecker {
         return scope;
     }
 
-    // CON
+    // CON-01
     public void conIsolatedNode() {
         // no in no out
         for (Node node : nodes.values()) {
@@ -147,20 +148,14 @@ public class BPMNChecker {
         }
     }
 
-//    private boolean isInAdHocBox() {
-//        // Possibility 1:
-//         // only accept pure "task" processes
-//        // Possibility 2:
-//
-//        // if adhoc subprocess is necessary, then fulfill this part
-//        return false;
-//    }
-
+    // CON-02
     public void conMissingIncomingSequenceFlow() {
-        // TODO ad hoc box maybe need to be considered or ignore
+
         for (Node node : nodes.values()) {
-            if (node.getIncomingEdges().isEmpty() && !node.getOutgoingEdges().isEmpty()
-                    && node.getType() != NodeType.STARTEVENT) {
+
+            // there is no need to check whether outgoing edge list is non-empty
+            // this will indeed lead to many cascading problem, this will be dealt with at Evaluation
+            if (node.getIncomingEdges().isEmpty() && node.getType() != NodeType.STARTEVENT) {
 
                 List<Node> errorNodes = new ArrayList<>();
                 List<Edge> errorEdges = new ArrayList<>();
@@ -168,10 +163,9 @@ public class BPMNChecker {
                 String scope = this.getScope(node);
                 errorNodes.add(node);
 
-                // public BPMNError(String errorId, String errorName, String errorCategory, String scope, String message, List<Edge> edges)
                 BPMNError error = new BPMNError("CON-02", "Missing Incoming Sequence Flow",
                         "Connectivity and Reachability", scope,
-                        "Node '" + node.getKey() + "' has outgoing flows but no incoming sequence flow.",
+                        "Node '" + node.getKey() + "' has no incoming sequence flow.",
                         errorNodes, errorEdges, Severity.ERROR);
                 errorList.add(error);
             }

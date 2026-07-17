@@ -174,8 +174,7 @@ public class BPMNChecker {
 
     public void conMissingOutgoingSequenceFlow() {
         for (Node node : nodes.values()) {
-            if (!node.getIncomingEdges().isEmpty() && node.getOutgoingEdges().isEmpty()
-                    && node.getType() != NodeType.ENDEVENT) {
+            if (node.getOutgoingEdges().isEmpty() && node.getType() != NodeType.ENDEVENT) {
 
                 List<Node> errorNodes = new ArrayList<>();
                 List<Edge> errorEdges = new ArrayList<>();
@@ -186,7 +185,7 @@ public class BPMNChecker {
                 // public BPMNError(String errorId, String errorName, String errorCategory, String scope, String message, List<Edge> edges)
                 BPMNError error = new BPMNError("CON-03", "Missing Outgoing Sequence Flow",
                         "Connectivity and Reachability", scope,
-                        "Node '" + node.getKey() + "' has incoming flows but no outgoing sequence flow.",
+                        "Node '" + node.getKey() + "' has no outgoing sequence flow.",
                         errorNodes, errorEdges, Severity.ERROR);
                 errorList.add(error);
             }
@@ -198,8 +197,10 @@ public class BPMNChecker {
         // LinkedHashMap<String, List<Node>> scopeNodes = this.getNodesByScope();
 
         for (List<Node> nodeList : scopeNodes.values()) {
+
             Set<Node> reachable = this.reachableInScope(nodeList);
             List<Node> unreachable = nodeList.stream().filter(node -> !reachable.contains(node)).toList();
+
             for (Node errorNode : unreachable) {
                 List<Node> errorNodes = new ArrayList<>();
                 errorNodes.add(errorNode);
@@ -215,24 +216,6 @@ public class BPMNChecker {
         }
 
     }
-
-//    // separate nodes by scope
-//    private LinkedHashMap<String, List<Node>> getNodesByScope() {
-//        LinkedHashMap<String, List<Node>> scopeNodes = new LinkedHashMap<>();
-//        // random subprocess --> Subprocess:[subId]
-//        // main process --> Main:[]
-//        for (Node node : nodes.values()) {
-//            String nodeScope = this.getScope(node);
-//            if (!scopeNodes.containsKey(nodeScope)) {
-//                List<Node> temp = new ArrayList<>();
-//                temp.add(node);
-//                scopeNodes.put(nodeScope, temp);
-//            } else {
-//                scopeNodes.get(nodeScope).add(node);
-//            }
-//        }
-//        return scopeNodes;
-//    }
 
     private Set<Node> reachableInScope(List<Node> partNodes) {
         // check whether a node is reachable from the start in this scope
@@ -836,62 +819,6 @@ public class BPMNChecker {
         }
     }
 
-//    public void xorRedundant() {
-//        for (Node node : nodes.values()) {
-//
-//            List<Node> errorNodes = new ArrayList<>();
-//            List<Edge> errorEdges = new ArrayList<>();
-//            String scope = this.getScope(node);
-//
-//            if (node.getType() == NodeType.EXCLUSIVEGATEWAY &&
-//                    node.getIncomingEdges().size() == 1 && node.getOutgoingEdges().size() == 1) {
-//                errorNodes.add(node);
-//
-//                BPMNError error = new BPMNError("XOR-03", "Redundant XOR Gateway",
-//                        "XOR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
-//                errorList.add(error);
-//            }
-//        }
-//    }
-
-//    // AND
-//    public void andMultipleRoles() {
-//        for (Node node : nodes.values()) {
-//            if (node.getType() == NodeType.PARALLELGATEWAY && node.getIncomingEdges().size() > 1
-//                    && node.getOutgoingEdges().size() > 1) {
-//                String scope = this.getScope(node);
-//                List<Node> errorNodes = new ArrayList<>();
-//                List<Edge> errorEdges = new ArrayList<>();
-//
-//                errorNodes.add(node);
-//
-//                BPMNError error = new BPMNError("AND-01", "AND Gateway Used as Both Split and Join",
-//                        "AND Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
-//                errorList.add(error);
-//            }
-//        }
-//    }
-
-//    public void andRedundant() {
-//
-//
-//        for (Node node : nodes.values()) {
-//
-//            List<Node> errorNodes = new ArrayList<>();
-//            List<Edge> errorEdges = new ArrayList<>();
-//            String scope = this.getScope(node);
-//
-//            if (node.getType() == NodeType.PARALLELGATEWAY && node.getIncomingEdges().size() == 1
-//                    && node.getOutgoingEdges().size() == 1) {
-//                errorNodes.add(node);
-//
-//                BPMNError error = new BPMNError("AND-02", "Redundant AND Gateway",
-//                        "AND Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
-//                errorList.add(error);
-//            }
-//        }
-//    }
-
     public void andMismatch() {
 
         for (List<Node> nodeList : this.scopeNodes.values()) {
@@ -975,26 +902,6 @@ public class BPMNChecker {
         return incoming;
     }
 
-//    // OR
-//    public void orMultipleRoles() {
-//
-//        for (Node node : nodes.values()) {
-//
-//            if (node.getType() == NodeType.INCLUSIVEGATEWAY && node.getIncomingEdges().size() > 1 && node.getOutgoingEdges().size() > 1) {
-//
-//                String scope = this.getScope(node);
-//                List<Node> errorNodes = new ArrayList<>();
-//                errorNodes.add(node);
-//                // errorNodes.addAll(reached.keySet());
-//
-//                List<Edge> errorEdges = new ArrayList<>();
-//
-//                BPMNError error = new BPMNError("OR-01", "OR Gateway Used as Both Split and Join",
-//                        "OR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
-//                errorList.add(error);
-//            }
-//        }
-//    }
 
     public void orMissingCondition() {
         for (Node node : nodes.values()) {
@@ -1028,22 +935,6 @@ public class BPMNChecker {
             }
         }
     }
-
-//    public void orRedundant() {
-//        for (Node node : nodes.values()) {
-//            if (node.getType() == NodeType.INCLUSIVEGATEWAY && node.getIncomingEdges().size() == 1 && node.getOutgoingEdges().size() == 1) {
-//
-//                String scope = this.getScope(node);
-//                List<Node> errorNodes = new ArrayList<>();
-//                errorNodes.add(node);
-//                List<Edge> errorEdges = new ArrayList<>();
-//
-//                BPMNError error = new BPMNError("OR-03", "Redundant OR Gateway",
-//                        "OR Gateway Errors", scope, "", errorNodes, errorEdges, Severity.WARNING);
-//                errorList.add(error);
-//            }
-//        }
-//    }
 
     // SUB
     public void subEmptySubprocess() {

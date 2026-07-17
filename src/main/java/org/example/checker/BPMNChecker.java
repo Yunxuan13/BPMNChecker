@@ -939,23 +939,14 @@ public class BPMNChecker {
     // SUB
     public void subEmptySubprocess() {
         for (Node node : nodes.values()) {
-            if (node.getType() == NodeType.SUBPROCESS) {
-
-                // do not check this error for id:subprocess:(xxx)
-                if (!node.isExpandedSubprocess()){
-                    continue;
-                }
+            if (node.getType() == NodeType.SUBGRAPH) {
 
                 String subId = node.getId();
 
-                boolean exist = false;
+                // "Subprocess:[" + node.getLocation() + "]"
+                String scopeName = "Subprocess:[" + subId + "]";
 
-                for (Node n : nodes.values()) {
-                    if (subId.equals(n.getLocation())) {
-                        exist = true;
-                        break;
-                    }
-                }
+                boolean exist = scopeNodes.containsKey(scopeName);
 
                 if (!exist) {
                     List<Node> errorNodes = new ArrayList<>();
@@ -984,7 +975,7 @@ public class BPMNChecker {
 
             if (!Objects.equals(source.getLocation(), target.getLocation())) {
                 List<Node> errorNodes = new ArrayList<>();
-                // TODO scope can also be list or just keep only add source
+
                 String scope = this.getScope(source);
                 errorNodes.add(source);
                 errorNodes.add(target);

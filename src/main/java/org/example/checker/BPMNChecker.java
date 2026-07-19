@@ -618,15 +618,11 @@ public class BPMNChecker {
             if (target == null) {
                 target = joinNode;
                 // reachedCount = 1;
-            } else if (target.getKey().equals(joinNode.getKey())) {
-                // reachedCount++;
-            } else {
+//            } else if (target.getKey().equals(joinNode.getKey())) {
+//                // reachedCount++;
+            } else if (!target.getKey().equals(joinNode.getKey())) {
                 return null;
             }
-        }
-
-        if (target == null) {
-            return null;
         }
 
         return target;
@@ -957,11 +953,6 @@ public class BPMNChecker {
         }
     }
 
-    // currently we dont consider adhoc box
-//    public BPMNError subIllegalElement() {
-//        return null;
-//    }
-
     // LBL
     public void  lblDuplicateName() {
         // label nodes with same label
@@ -1239,6 +1230,5 @@ public class BPMNChecker {
     public void setScopeNodes(LinkedHashMap<String, List<Node>> scopeNodes) {
         this.scopeNodes = scopeNodes;
     }
-
 
 }

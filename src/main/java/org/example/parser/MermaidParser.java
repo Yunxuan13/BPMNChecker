@@ -29,20 +29,13 @@ public class MermaidParser {
     private int currentInnerSubId = 0;
 
 
-    public MermaidParser(String mermaidPath) throws Exception {
+    public MermaidParser(String mermaidPath) throws IOException, InputValidationException {
         this.nodes = new LinkedHashMap<>();
 
         this.edges = new ArrayList<>();
         this.subprocesses = new ArrayList<>();
         this.processes = new ArrayList<>();
-        try {
-            this.parse(mermaidPath);
-        } catch (InputValidationException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new Exception("Failed to parse Mermaid file '" + mermaidPath + "': " + e.getMessage(), e);
-        }
-
+        this.parse(mermaidPath);
     }
 
     private void parse(String mermaidPath) throws InputValidationException, IOException {
@@ -65,8 +58,10 @@ public class MermaidParser {
                 // here an invalid subgraph will not be added to the set due to getSubgraphId
                 if (this.isSubgraph(line)) {
                     subgraphIds.add(this.getSubgraphId(line));
+                    currentInnerSubId++;
                 }
             }
+            currentInnerSubId = 0;
 
             for (String rawLine : lines) {
                 String line = rawLine.strip();
@@ -229,13 +224,16 @@ public class MermaidParser {
                 return middle;
             }
         } else {
-            if (info.contains(" ")) {
-                return "subGraph" + currentInnerSubId;
+            if (info.isBlank() || info.isEmpty()) {
+                throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "The subgraph of line '"+ line + "' contains neither an id nor a label, which is an invalid subgraph. " + SYNTAX_REMINDER);
             } else {
-                return info;
+                if (info.contains(" ")) {
+                    return "subGraph" + currentInnerSubId;
+                } else {
+                    return info;
+                }
             }
         }
-
     }
 
     private boolean hasLabelBlock(int begin, int end) {
@@ -253,8 +251,6 @@ public class MermaidParser {
             return info;
         }
     }
-
-
 
     private String resolveEndpoint(String node, Deque<String> subs, Set<String> subgraphIds, String line) throws InputValidationException {
         if (this.isNode(node)) {

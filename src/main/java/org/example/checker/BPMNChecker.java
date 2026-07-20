@@ -24,7 +24,6 @@ public class BPMNChecker {
             List<Edge> in = new ArrayList<>();
             List<Role> roles = new ArrayList<>();
             for (Edge edge : edges) {
-                // TODO: sourceKey
                 if (Objects.equals(edge.getSourceKey(), node.getKey())) {
                     out.add(edge);
                 }
@@ -146,7 +145,7 @@ public class BPMNChecker {
 
             // there is no need to check whether outgoing edge list is non-empty
             // this will indeed lead to many cascading problem, this will be dealt with at Evaluation
-            if (node.getIncomingEdges().isEmpty() && node.getType() != NodeType.STARTEVENT) {
+            if (node.getIncomingEdges().isEmpty() && node.getType() != NodeType.STARTEVENT && !node.getOutgoingEdges().isEmpty()) {
 
                 List<Node> errorNodes = new ArrayList<>();
                 List<Edge> errorEdges = new ArrayList<>();
@@ -156,7 +155,7 @@ public class BPMNChecker {
 
                 BPMNError error = new BPMNError("CON-02", "Missing Incoming Sequence Flow",
                         "Connectivity and Reachability", scope,
-                        "Node '" + node.getKey() + "' has no incoming sequence flow.",
+                        "Node '" + node.getKey() + "', which is not start event and has outgoing flows, has no incoming sequence flow.",
                         errorNodes, errorEdges, Severity.ERROR);
                 errorList.add(error);
             }
@@ -165,7 +164,7 @@ public class BPMNChecker {
 
     public void conMissingOutgoingSequenceFlow() {
         for (Node node : nodes.values()) {
-            if (node.getOutgoingEdges().isEmpty() && node.getType() != NodeType.ENDEVENT) {
+            if (node.getOutgoingEdges().isEmpty() && node.getType() != NodeType.ENDEVENT && !node.getIncomingEdges().isEmpty()) {
 
                 List<Node> errorNodes = new ArrayList<>();
                 List<Edge> errorEdges = new ArrayList<>();
@@ -176,7 +175,7 @@ public class BPMNChecker {
                 // public BPMNError(String errorId, String errorName, String errorCategory, String scope, String message, List<Edge> edges)
                 BPMNError error = new BPMNError("CON-03", "Missing Outgoing Sequence Flow",
                         "Connectivity and Reachability", scope,
-                        "Node '" + node.getKey() + "' has no outgoing sequence flow.",
+                        "Node '" + node.getKey() + "', which is not end event and has incoming flows, has no outgoing sequence flow.",
                         errorNodes, errorEdges, Severity.ERROR);
                 errorList.add(error);
             }

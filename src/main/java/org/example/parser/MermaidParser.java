@@ -42,7 +42,7 @@ public class MermaidParser {
 
         try {
             List<String> lines = Files.readAllLines(Path.of(mermaidPath));
-            // TODO：node（包括subprocess）都应该出现在“最内层” 应加上nodeDepth，若同层则不更新location，若更深层则更新最内层的位置
+
             // 应该先检查身处何处，再加入新的subprocess
 
             // can contain same value
@@ -69,7 +69,7 @@ public class MermaidParser {
                 // no need to deal with graph TD/flowchart or something similar
                 // ignore empty lines and comment lines
                 // ignore direction
-                if (line.isEmpty() || line.equals("graph LR") || line.startsWith("%%") || line.equals("direction TD") || line.equals("direction LR")) {
+                if (line.isEmpty() || line.equals("graph LR") || line.equals("graph TD") || line.equals("flowchart LR") || line.startsWith("%%") || line.equals("direction TD") || line.equals("direction LR")) {
                     continue;
 
                 } else if (this.isSubgraph(line)) {
@@ -129,18 +129,17 @@ public class MermaidParser {
 
                 } else if (this.isEdge(line)) {
 
-                    // TODO edge must be pure edge:
-                    //  must contain "-->", |condition| after "-->" is optional (at current parser level)
-                    //  before "-->" and after "-->" must be valid node or valid subgraphId
-                    //  a node is valid if it has strictly 3 parts that are separated by ":" like a:b:c
-                    //  a is strictly conducted by number: 0-n without space
-                    //  b is strictly before strip() equals "startevent" or "endevent" or "exclusivegateway" or "inclusivegateway" or "parallelgateway" or "subprocess" or "task"
-                    //  c is strictly complete block encased by "()" or "(())" or "((()))" or "{}" (we dont check characters' validity under current decision version)
-
-                    // e.g. id1:type1:shape --> id:type:shape
+                    // e.g. form like id1:type1:shape --> id:type:shape
                     // & id:type:shape -->|condition-label| id:type:shape
                     // cut at -->
                     String[] seperated = line.split("-->");
+
+                    // node1 --> node2 --> node3 ..... out of scope of our checker
+                    if (seperated.length != 2) {
+                        throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Line '" + line + "' may have multiple endpoints." + SYNTAX_REMINDER);
+                    }
+
+
                     String source = seperated[0].strip();
                     // which can contains condition part
                     String right = seperated[1].strip();

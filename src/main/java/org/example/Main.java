@@ -141,7 +141,7 @@ public class Main {
         try {
             reporter = check(file.getPath());
         } catch (InputValidationException e) {
-            csv.write(row(dataset, name, "INPUT_NOT_SUPPORTED", "", "", "", e.getReason().name(), "") + "\n");
+            csv.write(row(dataset, name, "INPUT_NOT_SUPPORTED", "", "", "", e.getReason().name() + ": " + e.getMessage(), "") + "\n");
             return INPUT_NOT_SUPPORTED;
         } catch (Exception e) {
             csv.write(row(dataset, name, "PROCESSING_FAILED", "","","",e.getMessage(),"") + "\n");

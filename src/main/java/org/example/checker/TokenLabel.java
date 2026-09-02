@@ -9,7 +9,7 @@ import java.util.List;
 
 public class TokenLabel {
 
-    private List<Node> tokenBirth;
+    // private List<Node> tokenBirth;
 
     // private String tokenBirthNodeKey;
     // private Edge edge;
@@ -18,8 +18,8 @@ public class TokenLabel {
     // TODO：为了方便找分裂点
     private LinkedHashMap<Node, Integer> splits;
 
-    public TokenLabel(List<Node> tokenBirth, int branchIndex, List<Edge> history, LinkedHashMap<Node, Integer> splits) {
-        this.tokenBirth = tokenBirth;
+    public TokenLabel(int branchIndex, List<Edge> history, LinkedHashMap<Node, Integer> splits) {
+        //this.tokenBirth = tokenBirth;
         this.branchIndex = branchIndex;
         // this.edge = edge;
         this.history = history;
@@ -51,13 +51,13 @@ public class TokenLabel {
         this.history = history;
     }
 
-    public List<Node> getTokenBirth() {
-        return tokenBirth;
-    }
-
-    public void setTokenBirth(List<Node> tokenBirth) {
-        this.tokenBirth = tokenBirth;
-    }
+//    public List<Node> getTokenBirth() {
+//        return tokenBirth;
+//    }
+//
+//    public void setTokenBirth(List<Node> tokenBirth) {
+//        this.tokenBirth = tokenBirth;
+//    }
 
     public LinkedHashMap<Node, Integer> getSplits() {
         return splits;

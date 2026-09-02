@@ -11,15 +11,26 @@ public class BPMNChecker {
     private LinkedHashMap<String, Node> nodes;
     private List<Edge> edges;
     private List<BPMNError> errorList;
-    private LinkedHashMap<String, List<Node>> scopeNodes;
 
+    private LinkedHashMap<String, List<Node>> scopeNodes;
+    private LinkedHashMap<String, Set<Edge>> scopeBackEdges;
+    private LinkedHashMap<String, List<Edge>> scopeEdges;
+
+    // private LinkedHashMap<Edge, Boolean> arrivalState;
+    private LinkedHashMap<Edge, List<TokenLabel>> edgeTokens;
+    private final LinkedHashMap<Node, List<TokenLabel>> nodeTokens;
+
+    // store each merge point and its merging splits
+    private LinkedHashMap<Node, List<Node>> mergeList;
 
     public BPMNChecker(MermaidParser parser) {
         this.nodes = parser.getNodes();
         this.edges = parser.getEdges();
         this.errorList = new ArrayList<>();
 
+        // preset everything that can be set.
         for (Node node : nodes.values()) {
+            // TODO: 这里多一个版本，非cross和可cross版。
             List<Edge> out = new ArrayList<>();
             List<Edge> in = new ArrayList<>();
             List<Role> roles = new ArrayList<>();
@@ -43,6 +54,7 @@ public class BPMNChecker {
             node.setRoles(roles);
         }
 
+        // scope nodes
         this.scopeNodes = new LinkedHashMap<>();
         for (Node node : nodes.values()) {
             String nodeScope = this.getScope(node);
@@ -55,7 +67,422 @@ public class BPMNChecker {
             }
         }
 
+        // scope back edges
+        this.scopeBackEdges = new LinkedHashMap<>();
+        this.scopeEdges = new LinkedHashMap<>();
+
+        for (String scope : this.scopeNodes.keySet()) {
+            // all nodes in one scope
+            List<Node> nodeList = this.scopeNodes.get(scope);
+            Set<Edge> back = this.getLoopEdges(nodeList);
+
+            this.scopeBackEdges.put(scope, back);
+
+            // 如果一个edge的source和target都在该scope中则算作scopeEdges
+
+            List<Edge> inScope = new ArrayList<>();
+            for (Edge edge : edges) {
+                String sourceKey = edge.getSourceKey();
+                String targetKey = edge.getTargetKey();
+                if (nodes.get(sourceKey) != null && nodes.get(targetKey) != null) {
+                    if (this.getScope(nodes.get(sourceKey)).equals(scope) && this.getScope(nodes.get(targetKey)).equals(scope)) {
+                        inScope.add(edge);
+                    }
+                }
+
+            }
+            this.scopeEdges.put(scope, inScope);
+        }
+
+        this.edgeTokens = new LinkedHashMap<>();
+        this.nodeTokens = new LinkedHashMap<>();
+        // Edge
+        for (String scope : scopeNodes.keySet()) {
+            List<Node> nodeList = this.scopeNodes.get(scope);
+            Set<Edge> backEdges = this.scopeBackEdges.get(scope);
+            this.distributeLabels(nodeList, backEdges);
+        }
+
+
     }
+
+    // 直接在edgeToken上进行更改
+    private void distributeLabels(List<Node> nodeList, Set<Edge> backEdges) {
+        // save the nodes that already have been handled
+        // Set<Node> arrivals = new HashSet<>();
+        Set<Node> starts = new HashSet<>();
+
+        if (nodeList.isEmpty()) {
+            return;
+        }
+
+        // Map<Edge, Boolean> edgeArrivalState = new LinkedHashMap<>();
+        LinkedHashMap<Node, Map<Edge, Boolean>> nodeArrivalTable = new LinkedHashMap<>();
+
+        // TODO: currentScope for scope filter
+        String currentScope = this.getScope(nodeList.get(0));
+
+        // TODO：把所有的start point推进队列，所有start无前序list，但是在node处应存在tokenLabel
+        Deque<Node> processList = new ArrayDeque<>();
+
+        // 防止死循环
+        Set<Node> arrival = new HashSet<>();
+        Set<Node> finished = new HashSet<>();
+
+        Set<Node> waitingList = new HashSet<>();
+
+        // TODO：未作去cross化
+        for (Node node : nodeList) {
+            // if (this.isMerge(node, backEdges)) {
+            LinkedHashMap<Edge, Boolean> e = new LinkedHashMap<>();
+            if (node.getIncomingEdges().isEmpty()) {
+                starts.add(node);
+                // arrivals.add(node);
+                processList.push(node);
+            } else {
+                for (Edge edge : node.getIncomingEdges()) {
+                    e.put(edge, false);
+                }
+                nodeArrivalTable.put(node, e);
+            }
+        }
+
+
+        // TODO：把所有的无 incoming sequence flow 的 nodes 都当作是一个 dummy-start 的分支，因此应该被算成整体计算
+        //  --> put into the deque at first, instead of processing it one by one in a for-loop
+
+        // int initialBranches = starts.size();
+
+        // TODO：似乎不需要currentNode，用nodeTokens代替。
+        // List<TokenLabel> currentTokenList = new ArrayList<>();
+        int initialIndex = 0;
+
+        // TODO: 如何知道自己从哪里开始
+        while (!processList.isEmpty()) {
+
+            // TODO：使用改良版 DFS --> LIFO （push & pop as a pair）
+            Node currentNode = processList.pop();
+            arrival.add(currentNode);
+
+            int initialBranchIndex = initialIndex++;
+
+            // TODO：分成两路线进行处理，在start列表中，不在start列表中
+            //  先处理当前节点，如果是start则在此处处理，如果是其余节点，则直接开始处理接下来的边的内容。
+            if (starts.contains(currentNode)) {
+
+                // TODO: 接下来的该节点的successors从当前branchIndex开始编号
+                List<TokenLabel> startVersion = new ArrayList<>();
+                TokenLabel label = new TokenLabel(new ArrayList<>(), initialBranchIndex, new ArrayList<>(), new LinkedHashMap<>());
+                startVersion.add(label);
+
+                this.nodeTokens.put(currentNode, startVersion);
+
+            }
+
+
+
+            // TODO：用DFS是否可以用 currentTokenList 来做追踪呢？
+
+            // TODO：非 start（包括无头） 节点应该带着已有的TokenLabel出现，
+            //  因此在上一级处理的时候应该给下一层Node注入相应的TokenLabel，而后本层仅从Edge开始处理
+
+            List<Edge> outgoings = currentNode.getOutgoingEdges();
+            List<Edge> incomings = currentNode.getIncomingEdges();
+
+            // TODO: 先判断“currentNode”是不是已经到齐了
+            Map<Edge, Boolean> states = nodeArrivalTable.get(currentNode);
+
+
+            if (!this.isReady(states)) {
+                // 添加到另一段
+                processList.add(currentNode);
+                // 对本node不进行后续处理
+
+                waitingList.add(currentNode);
+                continue;
+            }
+
+
+
+            // TODO: 如果是merge，需要先处理，再填入它对应的PackageLabel或者合并后的普通TokenLabel
+            if (this.isMerge(currentNode, backEdges)) {
+
+                // TODO：如果是merge则先合并然后put进入nodeTokens
+
+                this.merge(currentNode, incomings);
+
+
+
+            }
+
+
+
+            // TODO: 如果是split或者merge则更新 birthNode list
+            if (this.isSplit(currentNode, backEdges)) {
+
+                for (int i = 0; i < outgoings.size(); i++) {
+                    List<TokenLabel> all = this.nodeTokens.get(currentNode);
+
+                    Edge e = outgoings.get(i);
+                    Node next = this.nodes.get(e.getTargetKey());
+
+                    for (TokenLabel tokenLabel : all) {
+                        this.updateState(e, next, currentNode, processList, i, tokenLabel, nodeArrivalTable, true);
+                    }
+                }
+            }
+
+            // TODO: normal single in single out node
+            //  是否需要 index=-1 表示没有分裂，是同一线路
+            if (outgoings.isEmpty()) {
+                continue;
+            } else {
+                Edge e = outgoings.get(0);
+                Node next = this.nodes.get(e.getTargetKey());
+
+                List<TokenLabel> all = this.nodeTokens.get(currentNode);
+                for (TokenLabel tokenLabel : all) {
+                    this.updateState(e, next, currentNode, processList, -1, tokenLabel, nodeArrivalTable, false);
+                }
+
+
+            }
+
+            finished.add(currentNode);
+            waitingList.remove(currentNode);
+        }
+
+
+    }
+
+    private void merge(Node currentNode, List<Edge> incomings) {
+
+        // List<Node> forwards = new ArrayList<>();
+
+        // List<TokenLabel> tokenLabels = new ArrayList<>();
+        // LinkedHashMap<Edge, List<Edge>> historyEdges = new LinkedHashMap<>();
+
+        // 该节点前面每一个incoming edge上带的split信息（可平行？）
+        LinkedHashMap<TokenLabel, LinkedHashMap<Node, Integer>> historySplits = new LinkedHashMap<>();
+        // LinkedHashMap<Node, Integer> splitLists = new LinkedHashMap<>();
+
+        // potentially considered as no need
+        // LinkedHashMap<Edge, List<Node>> births = new LinkedHashMap<>();
+
+        for (Edge edge : incomings) {
+            // forwards.add(this.nodes.get(edge.getSourceKey()));
+            List<TokenLabel> labels = this.edgeTokens.get(edge);
+
+            for (TokenLabel label : labels) {
+//                // tokenLabels.add(label);
+//                births.put(edge, label.getTokenBirth());
+
+                // historyEdges.put(edge, label.getHistory());
+
+                // splitLists.putAll(label.getSplits());
+
+                historySplits.put(label, label.getSplits());
+            }
+
+        }
+
+        // TODO: 每次比较historySplits中的所有行，
+        //  如果有某些edge对应的所有splitNode和integer（除了最后一个split的integer可不也只能不相同）都相同，则继续判断：
+        //  计算最后一个split的outgoing和回归的index数量是否相同，
+        //  如果相同则视为可合并。
+
+
+        // 比较上一个split，计算index是否都回来了
+        // 只要触发一次合并，alive就应该保持true
+        boolean alive = true;
+
+        while (alive) {
+            // List<Node> lastSplit = new ArrayList<>();
+            alive = false;
+            // last split node for each edge
+            // TODO: 不可以重复！！
+
+            // 完全相同的前n-1组，完全相同的最后一组的
+
+            // <Node, Integer> n-1, same part, the last one will be calculated by tokenLabel afterwards.
+            LinkedHashMap<LinkedHashMap<Node, Integer>, List<TokenLabel>> groups = new LinkedHashMap<>();
+
+            // 为groups做准备
+            for (TokenLabel tokenLabel : historySplits.keySet()) {
+
+                LinkedHashMap<Node, Integer> splitNodes = new LinkedHashMap<>(tokenLabel.getSplits());
+
+                // n-1
+
+                // lastNode算法保留，最后一个splitNode需要保证node相同，integer不同
+                Node lastNode = this.getLastNode(splitNodes);
+                int branchIndex = splitNodes.get(lastNode);
+
+                splitNodes.remove(lastNode);
+
+                // groups里逐一去判断是否应该去merge
+                // 不急着直接put进去，最终再put
+
+
+                // TODO edge 记得去重
+                // TODO 如果groups中已经有这样的配对了，比较当前tokenLabel最后一个node是否split也相同但是index不同，
+                //  如果符合要求就把当前的tokenLabel和对应的split的map加入group
+                if (groups.containsKey(splitNodes)) {
+
+                    // 所有已经在的待合并列表
+                    List<TokenLabel> tokenLabels = new ArrayList<>(groups.get(splitNodes));
+
+                    // 每一个已经在列表里的tokenLabel对应的最后一个（其实不在splitNodes中）split都应该一样。
+                    boolean acceptable = true;
+                    for (TokenLabel label : tokenLabels) {
+                        Node temp = this.getLastNode(label.getSplits());
+                        int branchTemp = label.getSplits().get(temp);
+
+                        if (!temp.equals(lastNode) || branchIndex == branchTemp) {
+                            acceptable = false;
+                            break;
+                        }
+                    }
+                    if (acceptable) {
+                        List<TokenLabel> tokenLabelList = groups.get(splitNodes);
+                        tokenLabelList.add(tokenLabel);
+                        groups.put(splitNodes, tokenLabelList);
+                    }
+
+                } else {
+                    List<TokenLabel> same = new ArrayList<>();
+                    same.add(tokenLabel);
+                    groups.put(splitNodes, same);
+                }
+            }
+
+            // TODO 如果merge成功就直接set回true
+            for (LinkedHashMap<Node, Integer> splits : groups.keySet()) {
+                List<TokenLabel> tokenLabels = groups.get(splits);
+                List<Integer> index = this.getIndex(tokenLabels);
+
+                Node split = this.getLastNode(tokenLabels.get(0).getSplits());
+                int totalBranchNumber = split.getOutgoingEdges().size();
+
+                if (index.size() != totalBranchNumber) {
+                    continue;
+                }
+
+                boolean isOk = true;
+                for (int i = 0; i < index.size(); i++) {
+                    if (!index.contains(i)) {
+                        isOk = false;
+                        break;
+                    }
+                }
+
+                if (isOk) {
+                    alive = true;
+
+                    Set<Edge> history = new HashSet<>();
+
+                    for (TokenLabel tokenLabel : tokenLabels) {
+                        historySplits.remove(tokenLabel);
+                        history.addAll(tokenLabel.getHistory());
+                    }
+
+                    TokenLabel example = tokenLabels.get(0);
+
+                    // merge to a single tokenLabel
+                    List<Node> tokenBirth = new ArrayList<>(example.getTokenBirth());
+                    tokenBirth.remove(split);
+
+                    LinkedHashMap<Node, Integer> beforeMerge = example.getSplits();
+                    Node last = this.getLastNode(example.getSplits());
+                    beforeMerge.remove(last);
+                    Node realLast = this.getLastNode(example.getSplits());
+
+
+                    int branchIndex = beforeMerge.get(realLast);
+
+
+
+                    TokenLabel tokenLabel = new TokenLabel(tokenBirth, branchIndex, history.stream().toList(),beforeMerge);
+                    historySplits.put(tokenLabel, beforeMerge);
+
+                    List<Node> mergedSplits = new ArrayList<>();
+                    if (this.mergeList.containsKey(currentNode)) {
+                        mergedSplits = this.mergeList.get(currentNode);
+                    }
+                    mergedSplits.add(split);
+                    this.mergeList.put(currentNode, mergedSplits);
+                }
+
+            }
+        }
+
+        this.nodeTokens.put(currentNode, historySplits.keySet().stream().toList());
+
+
+    }
+
+    private List<Integer> getIndex(List<TokenLabel> tokenLabels) {
+        List<Integer> index = new ArrayList<>();
+        for (TokenLabel tokenLabel : tokenLabels) {
+            index.add(tokenLabel.getSplits().get(this.getLastNode(tokenLabel.getSplits())));
+        }
+        return index;
+    }
+
+    private Node getLastNode(LinkedHashMap<Node, Integer> splitNodes) {
+        Node lastNode = null;
+        for (Node n : splitNodes.keySet()) {
+            lastNode = n;
+        }
+        return lastNode;
+    }
+
+    private void updateState(Edge e, Node next, Node currentNode, Deque<Node> processList, int i,
+                             TokenLabel tokenLabel, LinkedHashMap<Node, Map<Edge, Boolean>> nodeArrivalTable, boolean isSplit) {
+
+        LinkedHashMap<Node, Integer> splits = new LinkedHashMap<>(tokenLabel.getSplits());
+
+        if (i > -1) {
+            splits.put(currentNode, i);
+        }
+
+        // 处理 currentNode 后的一条线和一个 Node
+        List<Edge> history = new ArrayList<>(tokenLabel.getHistory());
+        history.add(e);
+
+        List<Node> birthNode = new ArrayList<>();
+        if (isSplit) {
+            birthNode.add(this.nodes.get(currentNode.getKey()));
+        } else {
+            birthNode = new ArrayList<>(tokenLabel.getTokenBirth());
+        }
+
+
+        TokenLabel label = new TokenLabel(birthNode, i, history, splits);
+
+        // TODO 会撞
+        //  merge node 不在这里加入 map，在merge的时候处理：到时候作为currentNode的merge，outgoing，下一个列节点同时处理。
+        List<TokenLabel> labels = new ArrayList<>();
+        if (this.edgeTokens.containsKey(e)) {
+            labels = this.edgeTokens.get(e);
+        }
+        labels.add(label);
+        this.edgeTokens.put(e, labels);
+
+        if (next.getIncomingEdges().size() <= 1) {
+
+            // 如果下一个node并不是一个merge，应该继承前面那个边的tokenLabel
+            this.nodeTokens.put(next, labels);
+        }
+
+        processList.push(next);
+        nodeArrivalTable.get(next).put(e, true);
+    }
+
+    private boolean isReady(Map<Edge, Boolean> states) {
+        return states.values().stream().allMatch(b -> b);
+    }
+
 
     public void detectErrors() {
 
@@ -636,6 +1063,10 @@ public class BPMNChecker {
             Set<Edge> loopEdges = this.getLoopEdges(nodeList);
             String scope = this.getScope(nodeList.get(0));
 
+            // store all join nodes for second way checking
+            // split nodes that are joined by the node with key
+            Map<String, List<Node>> splitsByJoin = new LinkedHashMap<>();
+
             for (Node node : nodeList) {
                 // find split gateway first
                 if (node.isGateway() && this.isSplit(node, loopEdges)) {
@@ -678,8 +1109,53 @@ public class BPMNChecker {
                                 errorNodes, errorEdges, Severity.WARNING);
                         errorList.add(error);
                     }
+
+                    // DEBUG (detected by sapsam/71_ground_truth.txt)
+                    if (joinKeys.size() == 1) {
+                        Node joinNode = joinNodes.get(0);
+                        if (joinNode.getType() != NodeType.ENDEVENT) {
+                            String joinKey = joinNode.getKey();
+                            List<Node> splits = splitsByJoin.get(joinKey);
+                            if (splits == null) {
+                                splits = new ArrayList<>();
+                                splitsByJoin.put(joinKey, splits);
+                            }
+                            splits.add(node);
+                        }
+                    }
                 }
             }
+                for (String joinKey : splitsByJoin.keySet()) {
+                    List<Node> splits = splitsByJoin.get(joinKey);
+                    if (splits.size() < 2) {
+                        continue;
+                    }
+
+                    List<Node> errorNodes = new ArrayList<>(splits);
+
+                    Node join = this.nodes.get(joinKey);
+                    if (join != null) {
+                        errorNodes.add(join);
+                    }
+
+                    StringBuilder nodeKeys = new StringBuilder();
+                    for (Node split : splits) {
+                        if (!nodeKeys.isEmpty()) {
+                            nodeKeys.append(", ");
+                        }
+                        nodeKeys.append("'")
+                                .append(split.getKey())
+                                .append("'");
+                    }
+
+                    BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation",
+                            "General Gateway Errors", scope,
+                            "Split gateways: " + nodeKeys + " all merge at the same join node '" + joinKey
+                                    + "'; the blocks share one exit.",
+                            errorNodes, new ArrayList<>(), Severity.WARNING);
+                    errorList.add(error);
+
+                }
 
         }
     }
@@ -1230,4 +1706,31 @@ public class BPMNChecker {
         this.scopeNodes = scopeNodes;
     }
 
+    public LinkedHashMap<String, Set<Edge>> getScopeBackEdges() {
+        return scopeBackEdges;
+    }
+
+    public void setScopeBackEdges(LinkedHashMap<String, Set<Edge>> scopeBackEdges) {
+        this.scopeBackEdges = scopeBackEdges;
+    }
+
+    public LinkedHashMap<String, List<Edge>> getScopeEdges() {
+        return scopeEdges;
+    }
+
+    public void setScopeEdges(LinkedHashMap<String, List<Edge>> scopeEdges) {
+        this.scopeEdges = scopeEdges;
+    }
+
+    public LinkedHashMap<Edge, List<TokenLabel>> getEdgeTokens() {
+        return edgeTokens;
+    }
+
+    public void setEdgeTokens(LinkedHashMap<Edge, List<TokenLabel>> edgeTokens) {
+        this.edgeTokens = edgeTokens;
+    }
+
+    public LinkedHashMap<Node, List<TokenLabel>> getNodeTokens() {
+        return nodeTokens;
+    }
 }

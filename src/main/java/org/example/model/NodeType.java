@@ -13,5 +13,8 @@ public enum NodeType {
     // special case: if subprocess as inline-node
     SUBPROCESS,
     // special case: subgraph block
-    SUBGRAPH
+    SUBGRAPH,
+
+    // for Token distribution
+    DUMMY
 }

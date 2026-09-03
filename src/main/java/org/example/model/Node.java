@@ -36,6 +36,8 @@ public class Node {
         // should ensure there must be at least one role(?)
         this.roles = new ArrayList<>();
         this.location = location;
+        this.outgoingEdges = new ArrayList<>();
+        this.incomingEdges = new ArrayList<>();
     }
 
     public String getKey() {

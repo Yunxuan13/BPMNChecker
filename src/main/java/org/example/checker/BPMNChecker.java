@@ -164,9 +164,6 @@ public class BPMNChecker {
 
             Node currentNode = processQueue.pop();
 
-
-            // TODO：分成两路线进行处理，在start列表中，不在start列表中
-            //  先处理当前节点，如果是start则在此处处理，如果是其余节点，则直接开始处理接下来的边的内容。
             if (starts.contains(currentNode)) {
 
                 int initialBranchIndex = initialIndex++;
@@ -194,9 +191,6 @@ public class BPMNChecker {
             //  因此在上一级处理的时候应该给下一层Node注入相应的TokenLabel，而后本层仅从Edge开始处理
 
             List<Edge> outgoings = this.loopFreeOut.get(currentNode);
-
-            // TODO: 如果是split或者merge则更新 birthNode list
-
 
             for (int i = 0; i < outgoings.size(); i++) {
                 int index;
@@ -257,12 +251,6 @@ public class BPMNChecker {
 
         }
 
-        // TODO: 每次比较historySplits中的所有行，
-        //  如果有某些edge对应的所有splitNode和integer（除了最后一个split的integer可不也只能不相同）都相同，则继续判断：
-        //  计算最后一个split的outgoing和回归的index数量是否相同，
-        //  如果相同则视为可合并。
-
-
         // 比较上一个split，计算index是否都回来了
         // 只要触发一次合并，alive就应该保持true
         boolean alive = true;
@@ -270,7 +258,6 @@ public class BPMNChecker {
         while (alive) {
             alive = false;
             // last split node for each edge
-            // TODO: 不可以重复！！
 
             // 完全相同的前n-1组，完全相同的最后一组的
 
@@ -295,10 +282,6 @@ public class BPMNChecker {
                 // groups里逐一去判断是否应该去merge
                 // 不急着直接put进去，最终再put
 
-
-                // TODO edge 记得去重
-                // TODO 如果groups中已经有这样的配对了，比较当前tokenLabel最后一个node是否split也相同但是index不同，
-                //  如果符合要求就把当前的tokenLabel和对应的split的map加入group
                 if (groups.containsKey(splitNodes)) {
 
                     // 所有已经在的待合并列表
@@ -328,7 +311,6 @@ public class BPMNChecker {
                 }
             }
 
-            // TODO 如果merge成功就直接set回true
             for (LinkedHashMap<Node, Integer> splits : groups.keySet()) {
                 List<TokenLabel> tokenLabels = groups.get(splits);
                 List<Integer> index = this.getIndex(tokenLabels);
@@ -343,7 +325,6 @@ public class BPMNChecker {
 
                 boolean isOk = true;
 
-                // TODO 改
                 for (int i = 0; i < index.size(); i++) {
                     if (!index.contains(i)) {
                         isOk = false;
@@ -439,10 +420,7 @@ public class BPMNChecker {
             history.add(e);
 
             TokenLabel label = new TokenLabel(i, history, splits);
-            // updated.add(label);
 
-            // TODO 会撞
-            //  merge node 不在这里加入 map，在merge的时候处理：到时候作为currentNode的merge，outgoing，下一个列节点同时处理。
             List<TokenLabel> labels = new ArrayList<>();
             if (this.edgeTokens.containsKey(e)) {
                 labels = this.edgeTokens.get(e);
@@ -1727,13 +1705,5 @@ public class BPMNChecker {
 
 //    public Preprocessor getPreprocessor() {
 //        return preprocessor;
-//    }
-
-//    public LinkedHashMap<Node, List<Node>> getCollectedSplit() {
-//        return collectedSplit;
-//    }
-//
-//    public void setCollectedSplit(LinkedHashMap<Node, List<Node>> collectedSplit) {
-//        this.collectedSplit = collectedSplit;
 //    }
 }

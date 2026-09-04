@@ -45,6 +45,34 @@ public class Node {
         // subprocess then: sub_id:subprocess
     }
 
+    public String toString() {
+        String left = "";
+        String right = "";
+        String before = id + ":" + type.name().toLowerCase() + ":";
+        switch (type) {
+            case SUBGRAPH -> {
+                return "subgraph " + id + " [" + label + "]";
+            }
+            case EXCLUSIVEGATEWAY, PARALLELGATEWAY, INCLUSIVEGATEWAY -> {
+                left = "{";
+                right = "}";
+            }
+            case ENDEVENT -> {
+                left = "(((";
+                right = ")))";
+            }
+            case SUBPROCESS, TASK -> {
+                left = "(";
+                right = ")";
+            }
+            case STARTEVENT -> {
+                left = "((";
+                right = "))";
+            }
+        }
+        return before + left + label + right;
+    }
+
     public String getId() {
         return id;
     }
@@ -108,12 +136,4 @@ public class Node {
     public void setOutgoingEdges(List<Edge> outgoingEdges) {
         this.outgoingEdges = outgoingEdges;
     }
-
-//    public boolean isExpandedSubprocess() {
-//        return expandedSubprocess;
-//    }
-//
-//    public void setExpandedSubprocess(boolean expandedSubprocess) {
-//        this.expandedSubprocess = expandedSubprocess;
-//    }
 }

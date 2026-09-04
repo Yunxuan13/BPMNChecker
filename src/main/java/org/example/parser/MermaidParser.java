@@ -1,8 +1,6 @@
 package org.example.parser;
 
-import org.example.graph.MainProcess;
 import org.example.graph.ProcessGraph;
-import org.example.graph.Subprocess;
 import org.example.model.Edge;
 import org.example.model.Node;
 import org.example.model.NodeType;
@@ -18,11 +16,6 @@ public class MermaidParser {
     private LinkedHashMap<String, Node> nodes;
     private List<Edge> edges;
 
-    private MainProcess mainProcess;
-
-    private List<Subprocess> subprocesses;
-    private List<ProcessGraph> processes;
-
     private static final String SYNTAX_REMINDER = "The file was not structurally analyzed.";
 
     //
@@ -33,8 +26,6 @@ public class MermaidParser {
         this.nodes = new LinkedHashMap<>();
 
         this.edges = new ArrayList<>();
-        this.subprocesses = new ArrayList<>();
-        this.processes = new ArrayList<>();
         this.parse(mermaidPath);
     }
 
@@ -65,6 +56,8 @@ public class MermaidParser {
 
             for (String rawLine : lines) {
                 String line = rawLine.strip();
+
+                // TODO must contain first line e.g. graph LR
 
                 // no need to deal with graph TD/flowchart or something similar
                 // ignore empty lines and comment lines
@@ -308,41 +301,43 @@ public class MermaidParser {
         String label;
 
         // if type and shape dont match --> throw exception
-        if (shape.startsWith("(((") && shape.endsWith(")))")) {
+        if (shape.matches("\\(\\(\\([^(){}]*\\)\\)\\)")) {
+
             rawShape = RawShape.ENDEVENT;
             if (!type.equals(NodeType.ENDEVENT)) {
                 throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Type and shape at this line: '" + nodeLine + "' do not match. " + SYNTAX_REMINDER);
             }
             label = shape.substring(3, shape.length() - 3);
-        } else if (shape.startsWith("((") && shape.endsWith("))")) {
+
+        } else if (shape.matches("\\(\\([^(){}]*\\)\\)")) {
             rawShape = RawShape.STARTEVENT;
             if (!type.equals(NodeType.STARTEVENT)) {
                 throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Type and shape at this line: '" + nodeLine + "' do not match. " + SYNTAX_REMINDER);
             }
             label = shape.substring(2, shape.length() - 2);
-        } else if (shape.startsWith("(") && shape.endsWith(")")) {
+
+        } else if (shape.matches("\\([^(){}]*\\)")) {
+
             rawShape = RawShape.TASKORSUBPROCESS;
             if (!(type.equals(NodeType.TASK) || type.equals(NodeType.SUBPROCESS))) {
                 throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Type and shape at this line: '" + nodeLine + "' do not match. " + SYNTAX_REMINDER);
             }
             label = shape.substring(1, shape.length() - 1);
-        } else if (shape.startsWith("{") && shape.endsWith("}")) {
+
+        } else if (shape.matches("\\{[^{}()]*\\}")) {
             rawShape = RawShape.GATEWAY;
             if (!(type.equals(NodeType.EXCLUSIVEGATEWAY) || type.equals(NodeType.INCLUSIVEGATEWAY) || type.equals(NodeType.PARALLELGATEWAY))) {
                 throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Type and shape at this line: '" + nodeLine + "' do not match. " + SYNTAX_REMINDER);
             }
             label = shape.substring(1, shape.length() - 1);
-        }
 
-        // situation here:
-        // 1. complete block but not defined shape like []
-        // 2. not a block at shape e.g. id:type:something random here, with space or with xxx but without a shape outside
-        else {
+        } else {
             throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Maybe one/several of a shapes of nodes is/are out of scope in this checker (acceptable: '(...)', '((...))', '(((...)))', '{}') or the label(s) is(are) not encased. " + SYNTAX_REMINDER);
-
         }
 
         String key = id + ":" + type.name().toLowerCase();
+
+
 
         updateNode(subs, key, id, nodeLine, type, label, rawShape);
 
@@ -401,29 +396,5 @@ public class MermaidParser {
 
     public void setEdges(List<Edge> edges) {
         this.edges = edges;
-    }
-
-    public MainProcess getMainProcess() {
-        return mainProcess;
-    }
-
-    public void setMainProcess(MainProcess mainProcess) {
-        this.mainProcess = mainProcess;
-    }
-
-    public List<Subprocess> getSubprocesses() {
-        return subprocesses;
-    }
-
-    public void setSubprocesses(List<Subprocess> subprocesses) {
-        this.subprocesses = subprocesses;
-    }
-
-    public List<ProcessGraph> getProcesses() {
-        return processes;
-    }
-
-    public void setProcesses(List<ProcessGraph> processes) {
-        this.processes = processes;
     }
 }

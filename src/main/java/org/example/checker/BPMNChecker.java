@@ -1,5 +1,7 @@
 package org.example.checker;
 
+import org.example.graph.ProcessGraph;
+import org.example.graph.TokenLabelEngine;
 import org.example.model.*;
 import org.example.parser.MermaidParser;
 
@@ -11,7 +13,8 @@ public class BPMNChecker {
     private final LinkedHashMap<String, Node> nodes;
     private final List<Edge> edges;
     private List<BPMNError> errorList;
-    // private final Preprocessor preprocessor;
+    private ProcessGraph graph;
+    private TokenLabelEngine tokenLabelEngine;
 
     private LinkedHashMap<String, List<Node>> scopeNodes;
     private LinkedHashMap<String, Set<Edge>> scopeBackEdges;
@@ -34,406 +37,27 @@ public class BPMNChecker {
     public BPMNChecker(MermaidParser parser) {
         this.nodes = parser.getNodes();
         this.edges = parser.getEdges();
+        this.graph = new ProcessGraph(nodes, edges);
+        this.tokenLabelEngine = new TokenLabelEngine(graph);
+
         this.errorList = new ArrayList<>();
-        // this.preprocessor = new Preprocessor(nodes, edges);
-
-
-        List<Node> allNodes = this.nodes.values().stream().toList();
 
         // preset everything that can be set.
-        // this.collectedSplit = new LinkedHashMap<>();
-        this.mergeMap = new LinkedHashMap<>();
-        this.splitMap = new LinkedHashMap<>();
-
-        // set incoming and outgoing
-        for (Node node : allNodes) {
-
-            List<Edge> out = new ArrayList<>();
-            List<Edge> in = new ArrayList<>();
-            List<Role> roles = new ArrayList<>();
-
-            for (Edge edge : edges) {
-                if (Objects.equals(edge.getSourceKey(), node.getKey())) {
-                    out.add(edge);
-                }
-                if (Objects.equals(edge.getTargetKey(), node.getKey())) {
-                    in.add(edge);
-                }
-            }
-
-            node.setOutgoingEdges(out);
-            node.setIncomingEdges(in);
-
-            // TODO 判断这个到底需不需要，如果需要是否应该挪到后面去？
-            if (node.getIncomingEdges().size() > 1) {
-                roles.add(Role.MERGE);
-            }
-
-            if (node.getOutgoingEdges().size() > 1) {
-                roles.add(Role.SPLIT);
-            }
-            node.setRoles(roles);
-        }
 
         // scope nodes
-        this.scopeNodes = new LinkedHashMap<>();
-        for (Node node : nodes.values()) {
-            String nodeScope = this.getScope(node);
-            if (!scopeNodes.containsKey(nodeScope)) {
-                List<Node> temp = new ArrayList<>();
-                temp.add(node);
-                scopeNodes.put(nodeScope, temp);
-            } else {
-                scopeNodes.get(nodeScope).add(node);
-            }
-        }
+        this.scopeNodes = graph.getScopeNodes();
 
         // scope back edges
-        this.scopeBackEdges = new LinkedHashMap<>();
+        this.scopeBackEdges = graph.getScopeBackEdges();
 
-        for (String scope : this.scopeNodes.keySet()) {
-            // all nodes in one scope
-            List<Node> nodeList = this.scopeNodes.get(scope);
-            Set<Edge> back = this.getLoopEdges(nodeList);
+        this.loopFreeIn = graph.getLoopFreeIn();
+        this.loopFreeOut = graph.getLoopFreeOut();
 
-            this.scopeBackEdges.put(scope, back);
+        this.edgeTokens = tokenLabelEngine.getEdgeTokens();
+        this.nodeTokens = tokenLabelEngine.getNodeTokens();
 
-        }
-
-        this.loopFreeIn = new LinkedHashMap<>();
-        this.loopFreeOut = new LinkedHashMap<>();
-
-        for (Node node : allNodes) {
-            String scope = this.getScope(node);
-
-            List<Edge> in = new ArrayList<>(node.getIncomingEdges());
-            List<Edge> out = new ArrayList<>(node.getOutgoingEdges());
-
-            in.removeIf(i -> this.scopeBackEdges.get(scope).contains(i));
-            out.removeIf(o -> this.scopeBackEdges.get(scope).contains(o));
-
-            loopFreeIn.put(node, in);
-            loopFreeOut.put(node, out);
-        }
-
-        this.edgeTokens = new LinkedHashMap<>();
-        this.nodeTokens = new LinkedHashMap<>();
-        // Edge
-        for (String scope : scopeNodes.keySet()) {
-            List<Node> nodeList = this.scopeNodes.get(scope);
-            Set<Edge> backEdges = this.scopeBackEdges.get(scope);
-            this.distributeLabels(nodeList, backEdges);
-        }
-    }
-
-
-    // 直接在edgeToken上进行更改
-    private void distributeLabels(List<Node> nodeList, Set<Edge> backEdges) {
-
-        Set<Node> starts = new HashSet<>();
-
-        if (nodeList.isEmpty()) {
-            return;
-        }
-
-        LinkedHashMap<Node, Map<Edge, Boolean>> nodeArrivalTable = new LinkedHashMap<>();
-
-        Deque<Node> processQueue = new ArrayDeque<>();
-
-        for (Node node : nodeList) {
-            LinkedHashMap<Edge, Boolean> e = new LinkedHashMap<>();
-            List<Edge> in = loopFreeIn.get(node);
-
-            if (in.isEmpty()) {
-                starts.add(node);
-                processQueue.push(node);
-
-            } else {
-                for (Edge edge : in) {
-                    e.put(edge, false);
-                }
-
-                nodeArrivalTable.put(node, e);
-            }
-        }
-
-        int initialIndex = 0;
-        Node dummy = new Node("DUMMY","", NodeType.DUMMY, "", null, "");
-
-        while (!processQueue.isEmpty()) {
-
-            Node currentNode = processQueue.pop();
-
-            if (starts.contains(currentNode)) {
-
-                int initialBranchIndex = initialIndex++;
-
-                Edge dummyEdge = new Edge(dummy.getKey(), currentNode.getKey());
-                List<Edge> dummyOut = dummy.getOutgoingEdges();
-                dummyOut.add(dummyEdge);
-                this.loopFreeOut.put(dummy, dummyOut);
-
-
-                List<TokenLabel> startVersion = new ArrayList<>();
-                List<Edge> history = new ArrayList<>();
-                // history.add(dummyEdge);
-                LinkedHashMap<Node, Integer> splits = new LinkedHashMap<>();
-                splits.put(dummy, initialBranchIndex);
-
-                TokenLabel label = new TokenLabel(initialBranchIndex, history, splits);
-                startVersion.add(label);
-
-                this.nodeTokens.put(currentNode, startVersion);
-
-            }
-
-            // 非 start（包括无头） 节点应该带着已有的TokenLabel出现，
-            //  因此在上一级处理的时候应该给下一层Node注入相应的TokenLabel，而后本层仅从Edge开始处理
-
-            List<Edge> outgoings = this.loopFreeOut.get(currentNode);
-
-            for (int i = 0; i < outgoings.size(); i++) {
-                int index;
-                if (!this.isSplit(currentNode, backEdges)) {
-                    index = -1;
-                } else {
-                    index = i;
-                }
-
-                List<TokenLabel> all = this.nodeTokens.get(currentNode);
-
-                Edge e = outgoings.get(i);
-                Node next = this.nodes.get(e.getTargetKey());
-
-                Map<Edge, Boolean> states = nodeArrivalTable.get(next);
-                states.put(e, true);
-
-                // 在updateState中先把edge都更新了，再把更新后的存在这里
-                this.updateState(e, currentNode, index, all);
-
-                if (this.isReady(states)) {
-
-                    if (this.isMerge(next, backEdges)) {
-                        List<Edge> in = loopFreeIn.get(next);
-                        this.merge(next, in);
-
-                    } else {
-                        this.updateNodeLabel(e, next);
-                    }
-                    processQueue.push(next);
-                }
-
-            }
-        }
-
-
-    }
-
-    private void updateNodeLabel(Edge e, Node next) {
-
-        List<TokenLabel> labels = this.edgeTokens.get(e);
-        this.nodeTokens.put(next, labels);
-
-
-    }
-
-    private void merge(Node next, List<Edge> incomings) {
-
-        // 该节点前面每一个incoming edge上带的split信息（可平行？）
-        LinkedHashMap<TokenLabel, LinkedHashMap<Node, Integer>> historySplits = new LinkedHashMap<>();
-
-        for (Edge edge : incomings) {
-
-            List<TokenLabel> labels = this.edgeTokens.get(edge);
-            for (TokenLabel label : labels) {
-                historySplits.put(label, label.getSplits());
-            }
-
-        }
-
-        // 比较上一个split，计算index是否都回来了
-        // 只要触发一次合并，alive就应该保持true
-        boolean alive = true;
-
-        while (alive) {
-            alive = false;
-            // last split node for each edge
-
-            // 完全相同的前n-1组，完全相同的最后一组的
-
-            // <Node, Integer> n-1, same part, the last one will be calculated by tokenLabel afterward.
-            LinkedHashMap<LinkedHashMap<Node, Integer>, List<TokenLabel>> groups = new LinkedHashMap<>();
-
-            // 为groups做准备
-            for (TokenLabel tokenLabel : historySplits.keySet()) {
-
-                LinkedHashMap<Node, Integer> splitNodes = new LinkedHashMap<>(tokenLabel.getSplits());
-                if (splitNodes.isEmpty()) {
-                    continue;
-                }
-
-                // n-1
-                // lastNode算法保留，最后一个splitNode需要保证node相同，integer不同
-                Node lastNode = this.getLastNode(splitNodes);
-                int branchIndex = splitNodes.get(lastNode);
-
-                splitNodes.remove(lastNode);
-
-                // groups里逐一去判断是否应该去merge
-                // 不急着直接put进去，最终再put
-
-                if (groups.containsKey(splitNodes)) {
-
-                    // 所有已经在的待合并列表
-                    List<TokenLabel> tokenLabels = new ArrayList<>(groups.get(splitNodes));
-
-                    // 每一个已经在列表里的tokenLabel对应的最后一个（其实不在splitNodes中）split都应该一样。
-                    boolean acceptable = true;
-                    for (TokenLabel label : tokenLabels) {
-                        Node temp = this.getLastNode(label.getSplits());
-                        int branchTemp = label.getSplits().get(temp);
-
-                        if (!temp.equals(lastNode) || branchIndex == branchTemp) {
-                            acceptable = false;
-                            break;
-                        }
-                    }
-                    if (acceptable) {
-                        List<TokenLabel> tokenLabelList = groups.get(splitNodes);
-                        tokenLabelList.add(tokenLabel);
-                        groups.put(splitNodes, tokenLabelList);
-                    }
-
-                } else {
-                    List<TokenLabel> same = new ArrayList<>();
-                    same.add(tokenLabel);
-                    groups.put(splitNodes, same);
-                }
-            }
-
-            for (LinkedHashMap<Node, Integer> splits : groups.keySet()) {
-                List<TokenLabel> tokenLabels = groups.get(splits);
-                List<Integer> index = this.getIndex(tokenLabels);
-
-                Node split = this.getLastNode(tokenLabels.get(0).getSplits());
-
-                int totalBranchNumber = this.loopFreeOut.get(split).size();
-
-                if (index.size() != totalBranchNumber) {
-                    continue;
-                }
-
-                boolean isOk = true;
-
-                for (int i = 0; i < index.size(); i++) {
-                    if (!index.contains(i)) {
-                        isOk = false;
-                        break;
-                    }
-                }
-
-                if (isOk) {
-                    alive = true;
-
-                    Set<Edge> history = new HashSet<>();
-
-                    for (TokenLabel tokenLabel : tokenLabels) {
-                        historySplits.remove(tokenLabel);
-                        history.addAll(tokenLabel.getHistory());
-                    }
-
-                    TokenLabel example = tokenLabels.get(0);
-
-
-                    LinkedHashMap<Node, Integer> beforeMerge = new LinkedHashMap<>(example.getSplits());
-                    Node last = this.getLastNode(beforeMerge);
-                    beforeMerge.remove(last);
-                    Node realLast = this.getLastNode(beforeMerge);
-
-                    // 如果到最后一层了则为-1
-                    int branchIndex = -1;
-                    if (!(realLast == null)) {
-                        branchIndex = beforeMerge.get(realLast);
-                    }
-
-
-
-                    TokenLabel tokenLabel = new TokenLabel(branchIndex, history.stream().toList(),beforeMerge);
-                    historySplits.put(tokenLabel, beforeMerge);
-
-                    if (split.getType() != NodeType.DUMMY) {
-                        List<Node> mergePoints = new ArrayList<>();
-                        if (this.splitMap.containsKey(split)) {
-                            mergePoints = this.splitMap.get(split);
-                        }
-                        mergePoints.add(next);
-                        this.splitMap.put(split, mergePoints);
-
-                        // 当前node：next是merge point
-                        // 查看那些split在这里merge了
-                        List<Node> mergedSplits = new ArrayList<>();
-                        if (this.mergeMap.containsKey(next)) {
-                            mergedSplits = this.mergeMap.get(next);
-                        }
-                        mergedSplits.add(split);
-                        this.mergeMap.put(next, mergedSplits);
-                    }
-
-                }
-
-            }
-        }
-
-        this.nodeTokens.put(next, historySplits.keySet().stream().toList());
-    }
-
-    private List<Integer> getIndex(List<TokenLabel> tokenLabels) {
-        List<Integer> index = new ArrayList<>();
-        for (TokenLabel tokenLabel : tokenLabels) {
-            index.add(tokenLabel.getSplits().get(this.getLastNode(tokenLabel.getSplits())));
-        }
-        return index;
-    }
-
-    private Node getLastNode(LinkedHashMap<Node, Integer> splitNodes) {
-        Node lastNode = null;
-        for (Node n : splitNodes.keySet()) {
-            lastNode = n;
-        }
-        return lastNode;
-    }
-
-    // 新用法：这里用于更新edge并返回所有的TokenLabel
-    private void updateState(Edge e, Node currentNode, int i, List<TokenLabel> tokenLabels) {
-
-        for (TokenLabel tokenLabel : tokenLabels) {
-
-            LinkedHashMap<Node, Integer> splits = new LinkedHashMap<>(tokenLabel.getSplits());
-
-
-            if (i > -1) {
-                splits.put(currentNode, i);
-            }
-
-            // 处理 currentNode 后的一条线和一个 Node
-            List<Edge> history = new ArrayList<>(tokenLabel.getHistory());
-            history.add(e);
-
-            TokenLabel label = new TokenLabel(i, history, splits);
-
-            List<TokenLabel> labels = new ArrayList<>();
-            if (this.edgeTokens.containsKey(e)) {
-                labels = this.edgeTokens.get(e);
-            }
-            labels.add(label);
-            this.edgeTokens.put(e, labels);
-
-        }
-
-    }
-
-    private boolean isReady(Map<Edge, Boolean> states) {
-        return states.values().stream().allMatch(b -> b);
+        this.mergeMap = this.tokenLabelEngine.getMergeMap();
+        this.splitMap = this.tokenLabelEngine.getSplitMap();
     }
 
 
@@ -485,18 +109,6 @@ public class BPMNChecker {
         this.loopInvalidGateway();
     }
 
-    private String getScope(Node node) {
-        // node.getLocation() must be strictly equal to the original subgraph id
-        // otherwise it will lead to problem while checking SUB-01
-        String scope;
-        if (node.getLocation() == null) {
-            // to distinguish real main Process and subprocess with name Main
-            scope = "Main:[]";
-        } else {
-            scope = "Subprocess:[" + node.getLocation() + "]";
-        }
-        return scope;
-    }
 
     // CON-01
     public void conIsolatedNode() {
@@ -592,60 +204,11 @@ public class BPMNChecker {
     }
 
     private Set<Node> reachableInScope(List<Node> partNodes) {
-        // check whether a node is reachable from the start in this scope
-
-        List<Edge> edgesInScope = new ArrayList<>();
-        Set<Node> reachable = new HashSet<>();
-        Set<String> keys = new HashSet<>();
-
-        for (Node n : partNodes) {
-            keys.add(n.getKey());
-        }
-
-        for (Edge edge : edges) {
-            if (keys.contains(edge.getSourceKey()) && keys.contains(edge.getTargetKey())) {
-                edgesInScope.add(edge);
-            }
-        }
-
-        // first node can be NOT start event
-        // if theres no start event return empty set
-        for (Node start : partNodes) {
-            if (start.getType() == NodeType.STARTEVENT) {
-                reachable.add(start);
-                reachable.addAll(this.getArrival(partNodes, edgesInScope, start));
-            }
-        }
-
-        // return all reachable node in this scope
-        // what if there's no start event?
-        return reachable;
+        return this.graph.reachableInScope(partNodes);
     }
 
     private List<Node> getArrival(List<Node> scopeNodes, List<Edge> relatedEdges, Node start) {
-        // fifo, add and poll
-        List<Node> arrivals = new ArrayList<>();
-        Deque<Node> q = new ArrayDeque<>();
-        // set doenst allow same
-        Set<String> visited = new HashSet<>();
-        q.add(start);
-        visited.add(start.getKey());
-
-        while (!q.isEmpty()) {
-            Node current = q.poll();
-            for (Edge edge : current.getOutgoingEdges()) {
-                if (relatedEdges.contains(edge)) {
-                    for (Node target : scopeNodes) {
-                        if (target.getKey().equals(edge.getTargetKey()) && visited.add(target.getKey())) {
-                            q.add(target);
-                            arrivals.add(target);
-                        }
-                    }
-                }
-
-            }
-        }
-        return arrivals;
+        return this.graph.getArrival(scopeNodes, relatedEdges, start);
     }
 
 
@@ -834,283 +397,113 @@ public class BPMNChecker {
         }
     }
 
+    // TODO with TokenLabel
     public void gtwMismatched() {
 
-        for (List<Node> nodeList : scopeNodes.values()) {
 
-            Set<Edge> loopEdges = this.getLoopEdges(nodeList);
-
-            for (Node node : nodeList) {
-
-                if (!node.isGateway() || !this.isSplit(node, loopEdges)) {
-                    continue;
-                }
-
-                // JoinMatch match = this.strictMatchingJoin(node, loopEdges);
-
-                Node join = this.strictMatchingJoin(node, loopEdges);
-
-                if (join == null) {
-                    continue;
-                }
-
-                // Node join  = match.join;
-                if (!join.isGateway() || join.getType() == node.getType()) {
-                    continue;
-                }
-
-                List<Node> errorNodes = new ArrayList<>();
-                errorNodes.add(node);
-                errorNodes.add(join);
-
-                List<Edge> errorEdges = new ArrayList<>();
-
-                String scope = this.getScope(node);
-
-                BPMNError error = new BPMNError("GTW-03", "Mismatched Gateway Types", "General Gateway Errors",
-                        scope,
-                        "Split gateway '" + node.getKey() + "' is joined by '" + join.getKey() + "' of a different gateway type.",
-                        errorNodes, errorEdges, Severity.ERROR);
-
-                this.errorList.add(error);
-
-            }
-        }
-    }
-
-    private Set<Edge> getLoopEdges(List<Node> nodeList) {
-
-        Set<String> keys = new HashSet<>();
-
-        for (Node node : nodeList) {
-            keys.add(node.getKey());
-        }
-
-        Set<String> black = new HashSet<>();
-        Set<String> grey = new HashSet<>();
-
-        Set<Edge> loopEdges = new HashSet<>();
-
-        for (Node node : nodeList) {
-            if (!black.contains(node.getKey())) {
-                this.getLoopEdge(node, keys, black, grey, loopEdges);
-            }
-        }
-        return loopEdges;
-    }
-
-    private void getLoopEdge(Node node, Set<String> keys, Set<String> black, Set<String> grey, Set<Edge> loopEdges) {
-        black.add(node.getKey());
-        grey.add(node.getKey());
-
-        for (Edge edge: node.getOutgoingEdges()) {
-            String key = edge.getTargetKey();
-            Node target = this.nodes.get(key);
-
-            if (target == null || !keys.contains(target.getKey())) {
-                continue;
-            }
-
-            if (grey.contains(target.getKey())) {
-                loopEdges.add(edge);
-                continue;
-            }
-
-            if (!black.contains(target.getKey())) {
-                this.getLoopEdge(target, keys, black, grey, loopEdges);
-            }
-        }
-        grey.remove(node.getKey());
     }
 
 
-    private Node branchJoin(Node branchStart, String scope, Set<Edge> loopEdges) {
-        int balance  = 0;
-        Node current = branchStart;
-        Set<String> arrival = new HashSet<>();
-
-        while (current != null && arrival.add(current.getKey())) {
-
-            if (this.isMerge(current, loopEdges)) {
-                if (balance == 0) {
-                    return current;
-                } else {
-                    balance--;
-                }
-            }
-
-            if (this.isSplit(current, loopEdges)) {
-                balance++;
-            }
-
-            // only deal with edges not in loopEdges
-            Edge nextEdge = null;
-            for (Edge edge : current.getOutgoingEdges()) {
-                if (!loopEdges.contains(edge)) {
-                    nextEdge = edge;
-                    break;
-                }
-            }
-
-            if (nextEdge == null) {
-                return null;
-            }
-
-
-            String key = nextEdge.getTargetKey();
-            Node next = this.nodes.get(key);
-
-            // 保证在同一scope中
-            if (next == null || !this.getScope(next).equals(scope)) {
-                return null;
-            }
-
-            current = next;
-
-        }
-        return null;
-    }
-
-
-    private Node strictMatchingJoin(Node split, Set<Edge> loopEdges) {
-        String scope = this.getScope(split);
-        Node target = null;
-
-        for (Edge edge : split.getOutgoingEdges()) {
-
-            if (loopEdges.contains(edge)) {
-                continue;
-            }
-
-            Node start = nodes.get(edge.getTargetKey());
-            Node joinNode;
-            if (start == null) {
-                joinNode = null;
-            } else {
-                joinNode = this.branchJoin(start, scope, loopEdges);
-            }
-
-            if (joinNode == null) {
-                continue;
-            }
-
-            if (target == null) {
-                target = joinNode;
-                // reachedCount = 1;
-//            } else if (target.getKey().equals(joinNode.getKey())) {
-//                // reachedCount++;
-            } else if (!target.getKey().equals(joinNode.getKey())) {
-                return null;
-            }
-        }
-
-        return target;
-    }
+//    private Node branchJoin(Node branchStart, String scope, Set<Edge> loopEdges) {
+//        int balance  = 0;
+//        Node current = branchStart;
+//        Set<String> arrival = new HashSet<>();
+//
+//        while (current != null && arrival.add(current.getKey())) {
+//
+//            if (this.isMerge(current, loopEdges)) {
+//                if (balance == 0) {
+//                    return current;
+//                } else {
+//                    balance--;
+//                }
+//            }
+//
+//            if (this.isSplit(current, loopEdges)) {
+//                balance++;
+//            }
+//
+//            // only deal with edges not in loopEdges
+//            Edge nextEdge = null;
+//            for (Edge edge : current.getOutgoingEdges()) {
+//                if (!loopEdges.contains(edge)) {
+//                    nextEdge = edge;
+//                    break;
+//                }
+//            }
+//
+//            if (nextEdge == null) {
+//                return null;
+//            }
+//
+//
+//            String key = nextEdge.getTargetKey();
+//            Node next = this.nodes.get(key);
+//
+//            // 保证在同一scope中
+//            if (next == null || !this.getScope(next).equals(scope)) {
+//                return null;
+//            }
+//
+//            current = next;
+//
+//        }
+//        return null;
+//    }
 
 
+//    private Node strictMatchingJoin(Node split, Set<Edge> loopEdges) {
+//        String scope = this.getScope(split);
+//        Node target = null;
+//
+//        for (Edge edge : split.getOutgoingEdges()) {
+//
+//            if (loopEdges.contains(edge)) {
+//                continue;
+//            }
+//
+//            Node start = nodes.get(edge.getTargetKey());
+//            Node joinNode;
+//            if (start == null) {
+//                joinNode = null;
+//            } else {
+//                joinNode = this.branchJoin(start, scope, loopEdges);
+//            }
+//
+//            if (joinNode == null) {
+//                continue;
+//            }
+//
+//            if (target == null) {
+//                target = joinNode;
+//                // reachedCount = 1;
+////            } else if (target.getKey().equals(joinNode.getKey())) {
+////                // reachedCount++;
+//            } else if (!target.getKey().equals(joinNode.getKey())) {
+//                return null;
+//            }
+//        }
+//
+//        return target;
+//    }
 
+    // TODO with TokenNode
     public void gtwNestingViolation() {
 
-        for (List<Node> nodeList : this.scopeNodes.values()) {
 
-            Set<Edge> loopEdges = this.getLoopEdges(nodeList);
-            String scope = this.getScope(nodeList.get(0));
+//                        BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation",
+//                                "General Gateway Errors", scope,
+//                                "Branches of split gateway '" + node.getKey() + "' merge at " + joinKeys.size() + " different join nodes.",
+//                                errorNodes, errorEdges, Severity.WARNING);
+//                        errorList.add(error);
 
-            // store all join nodes for second way checking
-            // split nodes that are joined by the node with key
-            Map<String, List<Node>> splitsByJoin = new LinkedHashMap<>();
 
-            for (Node node : nodeList) {
-                // find split gateway first
-                if (node.isGateway() && this.isSplit(node, loopEdges)) {
-
-                    Set<String> joinKeys = new HashSet<>();
-                    List<Node> joinNodes = new ArrayList<>();
-
-                    // for algorithm-vereinfachung --> not consider loop edges from graph
-                    for (Edge edge : node.getOutgoingEdges()) {
-
-                        if (loopEdges.contains(edge)) {
-                            continue;
-                        }
-
-                        Node start = this.nodes.get(edge.getTargetKey());
-                        Node join = null;
-
-                        if (start != null) {
-                            join = this.branchJoin(start, scope, loopEdges);
-                        }
-
-                        if (join != null && joinKeys.add(join.getKey())) {
-                            joinNodes.add(join);
-                        }
-
-                    }
-
-                    // different branches merged at more than one gateway
-                    if (joinKeys.size() > 1) {
-
-                        List<Node> errorNodes = new ArrayList<>();
-                        errorNodes.add(node);
-                        errorNodes.addAll(joinNodes);
-
-                        List<Edge> errorEdges = new ArrayList<>();
-
-                        BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation",
-                                "General Gateway Errors", scope,
-                                "Branches of split gateway '" + node.getKey() + "' merge at " + joinKeys.size() + " different join nodes.",
-                                errorNodes, errorEdges, Severity.WARNING);
-                        errorList.add(error);
-                    }
-
-                    // DEBUG (detected by sapsam/71_ground_truth.txt)
-                    if (joinKeys.size() == 1) {
-                        Node joinNode = joinNodes.get(0);
-                        if (joinNode.getType() != NodeType.ENDEVENT) {
-                            String joinKey = joinNode.getKey();
-                            List<Node> splits = splitsByJoin.get(joinKey);
-                            if (splits == null) {
-                                splits = new ArrayList<>();
-                                splitsByJoin.put(joinKey, splits);
-                            }
-                            splits.add(node);
-                        }
-                    }
-                }
-            }
-                for (String joinKey : splitsByJoin.keySet()) {
-                    List<Node> splits = splitsByJoin.get(joinKey);
-                    if (splits.size() < 2) {
-                        continue;
-                    }
-
-                    List<Node> errorNodes = new ArrayList<>(splits);
-
-                    Node join = this.nodes.get(joinKey);
-                    if (join != null) {
-                        errorNodes.add(join);
-                    }
-
-                    StringBuilder nodeKeys = new StringBuilder();
-                    for (Node split : splits) {
-                        if (!nodeKeys.isEmpty()) {
-                            nodeKeys.append(", ");
-                        }
-                        nodeKeys.append("'")
-                                .append(split.getKey())
-                                .append("'");
-                    }
-
-                    BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation",
-                            "General Gateway Errors", scope,
-                            "Split gateways: " + nodeKeys + " all merge at the same join node '" + joinKey
-                                    + "'; the blocks share one exit.",
-                            errorNodes, new ArrayList<>(), Severity.WARNING);
-                    errorList.add(error);
-
-                }
-
-        }
+//                    BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation",
+//                            "General Gateway Errors", scope,
+//                            "Split gateways: " + nodeKeys + " all merge at the same join node '" + joinKey
+//                                    + "'; the blocks share one exit.",
+//                            errorNodes, new ArrayList<>(), Severity.WARNING);
+//                    errorList.add(error);
     }
 
     public void gtwMultipleRoles() {
@@ -1196,93 +589,17 @@ public class BPMNChecker {
         }
     }
 
-
+    // TODO new AND-01 logic
     public void andMismatch() {
 
-        for (List<Node> nodeList : this.scopeNodes.values()) {
 
-            Set<Edge> loopEdges = this.getLoopEdges(nodeList);
-            String scope = this.getScope(nodeList.get(0));
+//                BPMNError error = new BPMNError("AND-01", "AND Split and Join Branch Count Mismatch",
+//                        "AND Gateway Errors", scope,
+//                        "Branches of AND split '" + node.getKey() + "' do not synchronize at a single matching AND join.",
+//                        errorNodes, errorEdges, Severity.ERROR);
+//                errorList.add(error);
 
-            for (Node node : nodeList) {
-                if (node.getType() != NodeType.PARALLELGATEWAY || !this.isSplit(node, loopEdges)) {
-                    continue;
-                }
-
-                int branchCount = 0;
-                LinkedHashMap<Node, Integer> reached = new LinkedHashMap<>();
-
-                for (Edge edge : node.getOutgoingEdges()) {
-                    if (loopEdges.contains(edge)) {
-                        continue;
-                    }
-                    branchCount++;
-
-                    Node start = this.nodes.get(edge.getTargetKey());
-                    Node join;
-                    if (start == null) {
-                        join = null;
-                    } else {
-                        join = this.branchJoin(start, scope, loopEdges);
-                    }
-
-                    if (join != null) {
-                        Integer num  = reached.get(join);
-                        int a;
-                        if (num == null) {
-                            a = 1;
-                        } else {
-                            a = num + 1;
-                        }
-                        reached.put(join, a);
-                    }
-
-                }
-
-                // all and split gateway endlich merged at only one node(and node)
-                if (reached.size() == 1) {
-
-                    Node join = reached.keySet().iterator().next();
-                    int hit = reached.get(join);
-
-                    // not parallel --> ignore
-                    // and-03 not responsible for this situation
-                    if (join.getType() != NodeType.PARALLELGATEWAY) {
-                        continue;
-                    }
-
-                    // no problem
-                    if (hit == branchCount && this.getIncomingWithoutLoop(join, loopEdges) == branchCount) {
-                        continue;
-                    }
-
-                }
-
-                List<Node> errorNodes = new ArrayList<>();
-                errorNodes.add(node);
-                errorNodes.addAll(reached.keySet());
-
-                List<Edge> errorEdges = new ArrayList<>();
-
-                BPMNError error = new BPMNError("AND-01", "AND Split and Join Branch Count Mismatch",
-                        "AND Gateway Errors", scope,
-                        "Branches of AND split '" + node.getKey() + "' do not synchronize at a single matching AND join.",
-                        errorNodes, errorEdges, Severity.ERROR);
-                errorList.add(error);
-            }
-        }
     }
-
-    private int getIncomingWithoutLoop(Node node, Set<Edge> loopEdges) {
-        int incoming = 0;
-        for (Edge edge : node.getIncomingEdges()) {
-            if (!loopEdges.contains(edge)) {
-                incoming++;
-            }
-        }
-        return incoming;
-    }
-
 
     public void orMissingCondition() {
 
@@ -1503,7 +820,8 @@ public class BPMNChecker {
             }
 
             if (hasEndevent) {
-                Set<Edge> loopEdges = this.getLoopEdges(nodeList);
+                String scope = this.getScope(nodeList.get(0));
+                Set<Edge> loopEdges = graph.getScopeBackEdges().get(scope);
 
                 if (!loopEdges.isEmpty()) {
                     Set<String> keys = new HashSet<>();
@@ -1517,8 +835,6 @@ public class BPMNChecker {
                             edgesInScope.add(edge);
                         }
                     }
-
-                    String scope = this.getScope(nodeList.get(0));
 
                     Set<String> result = new HashSet<>();
 
@@ -1560,8 +876,9 @@ public class BPMNChecker {
     public void loopInvalidGateway() {
 
         for (List<Node> nodeList : scopeNodes.values()) {
-            Set<Edge> loopEdges = this.getLoopEdges(nodeList);
+
             String scope = this.getScope(nodeList.get(0));
+            Set<Edge> loopEdges = this.getScopeBackEdges().get(scope);
 
             for (Edge edge : loopEdges) {
                 Node exitLoop = nodes.get(edge.getSourceKey());
@@ -1595,37 +912,22 @@ public class BPMNChecker {
 
 
     private boolean isSplit(Node node) {
-        return node.getOutgoingEdges().size() > 1;
+        return this.graph.isSplit(node);
     }
 
     private boolean isSplit(Node node, Set<Edge> loopEdges) {
-        int count = 0;
-        for (Edge edge : node.getOutgoingEdges()) {
-            if (!loopEdges.contains(edge)) {
-                count++;
-            }
-        }
-
-        return count > 1;
+        return this.graph.isSplit(node, loopEdges);
     }
 
     private boolean isMerge(Node node) {
-        return node.getIncomingEdges().size() > 1;
+        return this.graph.isMerge(node);
     }
 
     // consider the situation of graph with loop
     // for gtw0304
     private boolean isMerge(Node node, Set<Edge> loopEdges) {
-        int count = 0;
-        for (Edge edge : node.getIncomingEdges()) {
-            if (!loopEdges.contains(edge)) {
-                count++;
-            }
-        }
-
-        return count > 1;
+        return this.graph.isMerge(node, loopEdges);
     }
-
 
     public LinkedHashMap<String, Node> getNodes() {
         return nodes;
@@ -1703,7 +1005,24 @@ public class BPMNChecker {
         this.loopFreeOut = loopFreeOut;
     }
 
-//    public Preprocessor getPreprocessor() {
-//        return preprocessor;
-//    }
+    public ProcessGraph getGraph() {
+        return graph;
+    }
+
+    public void setGraph(ProcessGraph graph) {
+        this.graph = graph;
+    }
+
+    public TokenLabelEngine getTokenLabelEngine() {
+        return tokenLabelEngine;
+    }
+
+    public void setTokenLabelEngine(TokenLabelEngine tokenLabelEngine) {
+        this.tokenLabelEngine = tokenLabelEngine;
+    }
+
+    private String getScope(Node node) {
+        return this.graph.getScope(node);
+    }
+
 }

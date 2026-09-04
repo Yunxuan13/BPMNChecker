@@ -14,6 +14,7 @@ public class BPMNError {
     private final List<Node> nodes;
     private final List<Edge> edges;
     private final Severity severity;
+    private String suggestionHint;
 
     public BPMNError(String errorId, String errorName, String errorCategory, String scope, String message, List<Node> nodes, List<Edge> edges, Severity severity) {
         this.errorId = errorId;
@@ -60,5 +61,13 @@ public class BPMNError {
 
     public Severity getSeverity() {
         return severity;
+    }
+
+    public String getSuggestionHint() {
+        return suggestionHint;
+    }
+
+    public void setSuggestionHint(String suggestionHint) {
+        this.suggestionHint = suggestionHint;
     }
 }

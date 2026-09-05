@@ -108,7 +108,7 @@ public class TokenLabelEngine {
 
             for (int i = 0; i < outgoings.size(); i++) {
                 int index;
-                if (!graph.isSplit(currentNode, backEdges)) {
+                if (!graph.isSplit(currentNode)) {
                     index = -1;
                 } else {
                     index = i;
@@ -127,7 +127,7 @@ public class TokenLabelEngine {
 
                 if (this.isReady(states)) {
 
-                    if (graph.isMerge(next, backEdges)) {
+                    if (graph.isMerge(next)) {
                         List<Edge> in = loopFreeIn.get(next);
                         this.merge(next, in);
 
@@ -304,7 +304,7 @@ public class TokenLabelEngine {
         return index;
     }
 
-    private Node getLastNode(LinkedHashMap<Node, Integer> splitNodes) {
+    public Node getLastNode(LinkedHashMap<Node, Integer> splitNodes) {
         Node lastNode = null;
         for (Node n : splitNodes.keySet()) {
             lastNode = n;

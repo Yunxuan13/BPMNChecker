@@ -14,6 +14,7 @@ public class ProcessGraph {
 
     private LinkedHashMap<String, List<Node>> scopeNodes;
     private LinkedHashMap<String, Set<Edge>> scopeBackEdges;
+    private LinkedHashMap<String, List<Edge>> scopeEdges;
 
     // loop-free incoming and outgoing
     private LinkedHashMap<Node, List<Edge>> loopFreeIn;
@@ -25,52 +26,40 @@ public class ProcessGraph {
 
         this.scopeNodes = new LinkedHashMap<>();
         this.scopeBackEdges = new LinkedHashMap<>();
+        this.scopeEdges = new LinkedHashMap<>();
         this.loopFreeIn = new LinkedHashMap<>();
         this.loopFreeOut = new LinkedHashMap<>();
 
         this.setGraphs();
         this.buildScopeNodes();
+        this.buildScopeEdges();
         this.buildScopeBackEdges();
         this.buildLoopFreeEdges();
 
     }
 
-    public Set<Node> reachableInScope(List<Node> partNodes) {
-        // check whether a node is reachable from the start in this scope
+    public Set<Node> reachableInScope(List<Node> nodesInScope) {
 
-        List<Edge> edgesInScope = new ArrayList<>();
+        String scope = this.getScope(nodesInScope.get(0));
+
+        List<Edge> edgesInScope = this.scopeEdges.get(scope);
         Set<Node> reachable = new HashSet<>();
-        Set<String> keys = new HashSet<>();
 
-        for (Node n : partNodes) {
-            keys.add(n.getKey());
-        }
-
-        for (Edge edge : edges) {
-            if (keys.contains(edge.getSourceKey()) && keys.contains(edge.getTargetKey())) {
-                edgesInScope.add(edge);
-            }
-        }
-
-        // first node can be NOT start event
-        // if theres no start event return empty set
-        for (Node start : partNodes) {
+        for (Node start : nodesInScope) {
             if (start.getType() == NodeType.STARTEVENT) {
                 reachable.add(start);
-                reachable.addAll(this.getArrival(partNodes, edgesInScope, start));
+                reachable.addAll(this.getArrival(edgesInScope, start));
             }
         }
 
-        // return all reachable node in this scope
-        // what if there's no start event?
         return reachable;
     }
 
-    public List<Node> getArrival(List<Node> scopeNodes, List<Edge> relatedEdges, Node start) {
+    public List<Node> getArrival(List<Edge> relatedEdges, Node start) {
         // fifo, add and poll
         List<Node> arrivals = new ArrayList<>();
         Deque<Node> q = new ArrayDeque<>();
-        // set doenst allow same
+
         Set<String> visited = new HashSet<>();
         q.add(start);
         visited.add(start.getKey());
@@ -79,49 +68,34 @@ public class ProcessGraph {
             Node current = q.poll();
             for (Edge edge : current.getOutgoingEdges()) {
                 if (relatedEdges.contains(edge)) {
-                    for (Node target : scopeNodes) {
-                        if (target.getKey().equals(edge.getTargetKey()) && visited.add(target.getKey())) {
-                            q.add(target);
-                            arrivals.add(target);
-                        }
+                    Node target = this.nodes.get(edge.getTargetKey());
+                    if (visited.add(target.getKey())) {
+                        q.add(target);
+                        arrivals.add(target);
                     }
                 }
-
             }
         }
         return arrivals;
     }
 
+    // normal split check
     public boolean isSplit(Node node) {
         return node.getOutgoingEdges().size() > 1;
     }
 
-    public boolean isSplit(Node node, Set<Edge> loopEdges) {
-        int count = 0;
-        for (Edge edge : node.getOutgoingEdges()) {
-            if (!loopEdges.contains(edge)) {
-                count++;
-            }
-        }
-
-        return count > 1;
+    // loop-free，split check
+    public boolean isLoopFreeSplit(Node node) {
+        return this.loopFreeOut.get(node).size() > 1;
     }
 
     public boolean isMerge(Node node) {
         return node.getIncomingEdges().size() > 1;
     }
 
-    // consider the situation of graph with loop
-    // for gtw0304
-    public boolean isMerge(Node node, Set<Edge> loopEdges) {
-        int count = 0;
-        for (Edge edge : node.getIncomingEdges()) {
-            if (!loopEdges.contains(edge)) {
-                count++;
-            }
-        }
-
-        return count > 1;
+    // already loop free and not cross
+    public boolean isLoopFreeMerge(Node node) {
+        return this.loopFreeIn.get(node).size() > 1;
     }
 
     private void setGraphs() {
@@ -185,6 +159,7 @@ public class ProcessGraph {
         }
     }
 
+    // loop free and not cross edges
     private void buildLoopFreeEdges() {
         for (Node node : nodes.values()) {
             String scope = this.getScope(node);
@@ -192,15 +167,30 @@ public class ProcessGraph {
             List<Edge> in = new ArrayList<>(node.getIncomingEdges());
             List<Edge> out = new ArrayList<>(node.getOutgoingEdges());
 
-            in.removeIf(i -> this.scopeBackEdges.get(scope).contains(i));
-            out.removeIf(o -> this.scopeBackEdges.get(scope).contains(o));
+            in.removeIf(i -> this.scopeBackEdges.get(scope).contains(i) || !this.scopeEdges.get(scope).contains(i));
+            out.removeIf(o -> this.scopeBackEdges.get(scope).contains(o)|| !this.scopeEdges.get(scope).contains(o) );
 
             loopFreeIn.put(node, in);
             loopFreeOut.put(node, out);
         }
     }
 
+    private void buildScopeEdges() {
+        for (Edge edge : edges) {
+            Node source = this.nodes.get(edge.getSourceKey());
+            Node target = this.nodes.get(edge.getTargetKey());
 
+            if (this.getScope(source).equals(this.getScope(target))) {
+                List<Edge> edgesInScope = new ArrayList<>();
+                String scope = this.getScope(source);
+                if (this.scopeEdges.containsKey(scope)) {
+                    edgesInScope = this.scopeEdges.get(scope);
+                }
+                edgesInScope.add(edge);
+                scopeEdges.put(scope, edgesInScope);
+            }
+        }
+    }
 
     private Set<Edge> getLoopEdges(List<Node> nodeList) {
 
@@ -300,5 +290,13 @@ public class ProcessGraph {
 
     public void setLoopFreeIn(LinkedHashMap<Node, List<Edge>> loopFreeIn) {
         this.loopFreeIn = loopFreeIn;
+    }
+
+    public LinkedHashMap<String, List<Edge>> getScopeEdges() {
+        return scopeEdges;
+    }
+
+    public void setScopeEdges(LinkedHashMap<String, List<Edge>> scopeEdges) {
+        this.scopeEdges = scopeEdges;
     }
 }

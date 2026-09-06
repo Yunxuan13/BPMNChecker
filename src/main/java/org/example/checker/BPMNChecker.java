@@ -464,13 +464,9 @@ public class BPMNChecker {
         }
     }
 
-    // ❓GTW-04, with token check
+    // ✅GTW-04, with token check
     public void gtwNestingViolation() {
-        // TODO 检查所有的merge点以及它们前序来的edge来自什么最近split
-        //  1️⃣如果来自两个及两个以上的不同的split则视为一型gtw-04
-        //  2️⃣如果来自同一个分支的部分非完整token，且未归branch没有自己到另一个不同的end-event
 
-        // TODO 每个scope逐个检查
         for (String scope : graph.getScopeNodes().keySet()) {
 
             List<Node> nodesInScope = graph.getScopeNodes().get(scope);
@@ -530,16 +526,9 @@ public class BPMNChecker {
                                 })
                                 .toList();
 
-                        // TODO check the final point of other branches that didn't meet at this 'join',
-                        //  compare them with all other branches' final point,
-                        //  if any of them matches --> report error
-
-                        // TODO 1: find all final point of branches who meet here
-
                         Set<Node> mergedFinal = new LinkedHashSet<>();
                         for (int b : meet) {
                             mergedFinal.addAll(map.get(b));
-                            // 直接用map，移除之后只剩当前不在的
                             map.remove(b);
                         }
 
@@ -575,26 +564,34 @@ public class BPMNChecker {
 
     }
 
-    // ❓GTW-05, normal check
+    // ✅GTW-05, normal check
     public void gtwMultipleRoles() {
+
         for (Node node : nodes.values()) {
+
             if (node.isGateway() && node.getIncomingEdges().size() > 1 && node.getOutgoingEdges().size() > 1) {
+
                 String scope = graph.getScope(node);
+
                 List<Node> errorNodes = new ArrayList<>();
-                List<Edge> errorEdges = new ArrayList<>();
                 errorNodes.add(node);
 
+                List<Edge> errorEdges = new ArrayList<>();
+                errorEdges.addAll(node.getIncomingEdges());
+                errorEdges.addAll(node.getOutgoingEdges());
+
+                String message = "Gateway '" + node + "' is used as both split and join.";
+
                 BPMNError error = new BPMNError("GTW-05", "Gateway Used as Both Split and Join",
-                        "General Gateway Errors", scope,
-                        "Gateway '" + node.getKey() + "' is used as both split and join.",
-                        errorNodes, errorEdges, Severity.WARNING);
+                        GTW, scope, message, errorNodes, errorEdges, Severity.WARNING);
+
                 errorList.add(error);
             }
         }
 
     }
 
-    // ❓GTW-06, normal check
+    // ✅GTW-06, normal check
     public void gtwRedundant() {
 
         for (Node node : nodes.values()) {
@@ -603,18 +600,20 @@ public class BPMNChecker {
             List<Edge> errorEdges = new ArrayList<>();
             String scope = graph.getScope(node);
 
+            // all cross-scope-related put in sub
             if (node.isGateway() && node.getIncomingEdges().size() == 1
                     && node.getOutgoingEdges().size() == 1) {
 
                 errorNodes.add(node);
 
-                errorEdges.addAll(node.getOutgoingEdges());
                 errorEdges.addAll(node.getIncomingEdges());
+                errorEdges.addAll(node.getOutgoingEdges());
 
-                BPMNError error = new BPMNError("GTW-06", "Redundant Gateway",
-                        "General Gateway Errors", scope,
-                        "Gateway '" + node.getKey() + "' has exactly one incoming and one outgoing flow and has no routing effect.",
+                String message = "Gateway '" + node + "' has exactly one incoming and one outgoing flow and has no routing effect.";
+
+                BPMNError error = new BPMNError("GTW-06", "Redundant Gateway", GTW, scope, message,
                         errorNodes, errorEdges, Severity.WARNING);
+
                 errorList.add(error);
             }
         }
@@ -622,7 +621,7 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-    // ❓XOR-01, normal check
+    // ✅XOR-01, normal check
     public void xorMissingCondition() {
 
         for (Node node : nodes.values()) {
@@ -649,13 +648,11 @@ public class BPMNChecker {
 
                     errorNode.add(node);
 
-                    List<Edge> errorEdge = new ArrayList<>(without);
+                    String message = "XOR gateway '" + node + "' has " + without.size() +
+                            " outgoing flow(s) without a condition (at most one default flow is allowed).";
 
                     BPMNError error = new BPMNError("XOR-01", "Missing Condition on XOR Outgoing Flow",
-                            "XOR Gateway Errors", scope,
-                            "XOR gateway '" + node.getKey() + "' has " + without.size() +
-                                    " outgoing flow(s) without a condition (at most one default flow is allowed).",
-                            errorNode, errorEdge, Severity.ERROR);
+                            XOR, scope, message, errorNode, without, Severity.ERROR);
 
                     errorList.add(error);
                 }
@@ -680,7 +677,7 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-    // ❓OR-01, normal check
+    // ✅OR-01, normal check
     public void orMissingCondition() {
 
         for (Node node : nodes.values()) {
@@ -690,30 +687,27 @@ public class BPMNChecker {
                 int conditionNum = 0;
                 List<Edge> without = new ArrayList<>();
 
-                // List<Edge> invalid = new ArrayList<>();
                 for (Edge edge : node.getOutgoingEdges()) {
 
                     if (edge.getCondition() != null && !edge.getCondition().isEmpty()) {
                         conditionNum++;
                     } else {
                         without.add(edge);
-
                     }
                 }
 
                 if (conditionNum < node.getOutgoingEdges().size() - 1) {
 
                     String scope = graph.getScope(node);
+
                     List<Node> errorNodes = new ArrayList<>();
                     errorNodes.add(node);
-                    // errorNodes.addAll(reached.keySet());
-                    List<Edge> errorEdges = new ArrayList<>(without);
 
+                    String message = "OR gateway '" + node + "' has " + without.size() +
+                            " outgoing flow(s) without a condition (at most one default flow is allowed).";
 
                     BPMNError error = new BPMNError("OR-01", "Missing Condition on OR Outgoing Flow",
-                            "OR Gateway Errors", scope,
-                            "OR gateway '" + node.getKey() + "' has " + without.size() + " outgoing flow(s) without a condition (at most one default flow is allowed).",
-                            errorNodes, errorEdges, Severity.ERROR);
+                            OR, scope, message, errorNodes, without, Severity.ERROR);
 
                     errorList.add(error);
                 }
@@ -723,9 +717,11 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-    // ❓SUB-01, normal check
+    // ✅SUB-01, normal check
     public void subEmptySubprocess() {
+
         for (Node node : nodes.values()) {
+
             if (node.getType() == NodeType.SUBGRAPH) {
 
                 String subId = node.getId();
@@ -733,49 +729,54 @@ public class BPMNChecker {
                 // "Subprocess:[" + node.getLocation() + "]"
                 String scopeName = "Subprocess:[" + subId + "]";
 
-                boolean exist = graph.getScopeNodes().containsKey(scopeName);
+                if (!graph.getScopeNodes().containsKey(scopeName)) {
 
-                if (!exist) {
                     List<Node> errorNodes = new ArrayList<>();
                     errorNodes.add(node);
+
                     List<Edge> errorEdges = new ArrayList<>();
+
                     String scope = graph.getScope(node);
-                    BPMNError error = new BPMNError("SUB-01", "Empty Subprocess",
-                            "Subprocess Errors", scope,
-                            "Subprocess '" + node.getId() + "' contains no nodes.",
-                            errorNodes, errorEdges, Severity.ERROR);
+
+                    String message = "Subprocess '" + node + "' does not contain any nodes.";
+
+                    BPMNError error = new BPMNError("SUB-01", "Empty Subprocess", SUB, scope, message
+                            ,errorNodes, errorEdges, Severity.ERROR);
+
                     errorList.add(error);
                 }
             }
         }
     }
 
-    // ❓SUB-02, normal check
+    // ✅SUB-02, normal check
     public void subBoundaryViolation() {
+
         for (Edge edge : edges) {
 
             Node source = nodes.get(edge.getSourceKey());
             Node target = nodes.get(edge.getTargetKey());
 
-            // situation of source and target should be check
             if (source == null || target == null) {
                 continue;
             }
 
-            if (!Objects.equals(source.getLocation(), target.getLocation())) {
-                List<Node> errorNodes = new ArrayList<>();
+            if (!graph.getScope(source).equals(graph.getScope(target))) {
 
-                String scope = graph.getScope(source);
+                List<Node> errorNodes = new ArrayList<>();
                 errorNodes.add(source);
                 errorNodes.add(target);
+
+                String scope = graph.getScope(source);
 
                 List<Edge> errorEdges = new ArrayList<>();
                 errorEdges.add(edge);
 
-                BPMNError error = new BPMNError("SUB-02", "Subprocess Boundary Violation",
-                        "Subprocess Errors", scope,
-                        "Sequence flow from '" + source.getKey() + "' to '" + target.getKey() + "' crosses a subprocess boundary.",
-                        errorNodes, errorEdges, Severity.ERROR);
+                String message = "Sequence flow from '" + source.getKey() + "' to '" + target.getKey() + "' crosses a subprocess boundary.";
+
+                BPMNError error = new BPMNError("SUB-02", "Subprocess Boundary Violation", SUB, scope,
+                        message, errorNodes, errorEdges, Severity.ERROR);
+
                 this.errorList.add(error);
             }
         }
@@ -802,9 +803,7 @@ public class BPMNChecker {
                         labelNodes.get(label).add(node);
                     }
                 }
-
             }
-
         }
 
         for (List<Node> ln : labelNodes.values()) {

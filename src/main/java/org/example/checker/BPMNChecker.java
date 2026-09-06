@@ -16,23 +16,6 @@ public class BPMNChecker {
     private ProcessGraph graph;
     private TokenLabelEngine tokenLabelEngine;
 
-    private LinkedHashMap<String, List<Node>> scopeNodes;
-    private LinkedHashMap<String, Set<Edge>> scopeBackEdges;
-    private LinkedHashMap<String, List<Edge>> scopeEdges;
-
-    // token states
-    private LinkedHashMap<Edge, List<TokenLabel>> edgeTokens;
-    private final LinkedHashMap<Node, List<TokenLabel>> nodeTokens;
-
-    // store each merge point and its merging splits
-    // private LinkedHashMap<Node, List<Node>> collectedSplit; // at a merge node
-    private LinkedHashMap<Node, List<Node>> mergeMap;
-    private LinkedHashMap<Node, List<Node>> splitMap;
-
-    // loop-free incoming and outgoing
-    private LinkedHashMap<Node, List<Edge>> loopFreeIn;
-    private LinkedHashMap<Node, List<Edge>> loopFreeOut;
-
     private static final String CON = "Connectivity and Reachability";
     private static final String SE = "Start and End Event";
     private static final String GTW = "General Gateway Issues";
@@ -51,24 +34,6 @@ public class BPMNChecker {
         this.tokenLabelEngine = new TokenLabelEngine(graph);
 
         this.errorList = new ArrayList<>();
-
-        // preset everything that can be set.
-
-        // scope nodes
-        this.scopeNodes = this.graph.getScopeNodes();
-
-        // scope back edges
-        this.scopeBackEdges = this.graph.getScopeBackEdges();
-        this.scopeEdges = this.graph.getScopeEdges();
-
-        this.loopFreeIn = graph.getLoopFreeIn();
-        this.loopFreeOut = graph.getLoopFreeOut();
-
-        this.edgeTokens = tokenLabelEngine.getEdgeTokens();
-        this.nodeTokens = tokenLabelEngine.getNodeTokens();
-
-        this.mergeMap = this.tokenLabelEngine.getMergeMap();
-        this.splitMap = this.tokenLabelEngine.getSplitMap();
     }
 
     public void detectErrors() {
@@ -139,7 +104,7 @@ public class BPMNChecker {
                 // node in form id:type:shape+label (key = id:type)
                 String message = "Node '" + node + "' is an isolated node, which has no incoming and no outgoing sequence flows.";
 
-                BPMNError error = new BPMNError("CON-01", "Isolated Node", CON, this.getScope(node),
+                BPMNError error = new BPMNError("CON-01", "Isolated Node", CON, graph.getScope(node),
                         message, errorNodes, errorEdges, Severity.ERROR);
 
                 errorList.add(error);
@@ -160,7 +125,7 @@ public class BPMNChecker {
                 // no relevant edge
                 List<Edge> errorEdges = new ArrayList<>();
 
-                String scope = this.getScope(node);
+                String scope = graph.getScope(node);
                 errorNodes.add(node);
                 String message = "Node '" + node + "' which is not a start event has no incoming sequence flow.";
 
@@ -183,7 +148,7 @@ public class BPMNChecker {
                 List<Node> errorNodes = new ArrayList<>();
                 List<Edge> errorEdges = new ArrayList<>();
 
-                String scope = this.getScope(node);
+                String scope = graph.getScope(node);
                 errorNodes.add(node);
                 String message = "Node '" + node.getKey() + "' which is not an end event has no outgoing sequence flow.";
 
@@ -200,7 +165,7 @@ public class BPMNChecker {
     public void conUnreachableActivity() {
 
         // ignore all edges that cross scopes
-        for (List<Node> nodeList : scopeNodes.values()) {
+        for (List<Node> nodeList : graph.getScopeNodes().values()) {
 
             Set<Node> reachable = this.graph.reachableInScope(nodeList);
             List<Node> unreachable = nodeList.stream().filter(node -> !reachable.contains(node)).toList();
@@ -214,7 +179,7 @@ public class BPMNChecker {
                 // no related edges
                 List<Edge> errorEdges = new ArrayList<>();
 
-                String scope = this.getScope(errorNode);
+                String scope = graph.getScope(errorNode);
                 String message = "Node '" + errorNode + "' is not reachable from any start event in its scope.";
 
                 BPMNError error = new BPMNError("CON-04", "Unreachable Activity", CON, scope, message,
@@ -230,7 +195,7 @@ public class BPMNChecker {
     // ✅CON-05, need scope check and reachability check
     public void conEndEventUnreachableFromStart() {
 
-        for (List<Node> nodeList : scopeNodes.values()) {
+        for (List<Node> nodeList : graph.getScopeNodes().values()) {
 
             Set<Node> reachable = this.graph.reachableInScope(nodeList);
 
@@ -243,7 +208,7 @@ public class BPMNChecker {
 
                     List<Edge> errorEdges = new ArrayList<>();
 
-                    String scope = this.getScope(node);
+                    String scope = graph.getScope(node);
                     String message = "End event '" + node + "' is not reachable from any start event in its scope.";
 
                     BPMNError error = new BPMNError("CON-05", "End Event Unreachable from Start", CON,
@@ -260,14 +225,14 @@ public class BPMNChecker {
     // ✅SE-01, normal check
     public void seMissingStart() {
 
-        for (List<Node> nodeList : scopeNodes.values()) {
+        for (List<Node> nodeList : graph.getScopeNodes().values()) {
 
             // no related node needed
             List<Node> errorNodes = new ArrayList<>();
             // no related edge needed
             List<Edge> errorEdges = new ArrayList<>();
 
-            String scope = this.getScope(nodeList.get(0));
+            String scope = graph.getScope(nodeList.get(0));
 
             boolean startExist = false;
 
@@ -293,14 +258,14 @@ public class BPMNChecker {
     // ✅SE-02, normal check
     public void seMissingEnd() {
 
-        for (List<Node> nodeList : scopeNodes.values()) {
+        for (List<Node> nodeList : graph.getScopeNodes().values()) {
 
             // no related node needed
             List<Node> errorNodes = new ArrayList<>();
             // no related edge needed
             List<Edge> errorEdges = new ArrayList<>();
 
-            String scope = this.getScope(nodeList.get(0));
+            String scope = graph.getScope(nodeList.get(0));
 
             boolean endExist = false;
             for (Node node : nodeList) {
@@ -324,14 +289,14 @@ public class BPMNChecker {
     // ✅SE-03, normal check
     public void seMultipleStart() {
 
-        for (List<Node> nodeList : scopeNodes.values()) {
+        for (List<Node> nodeList : graph.getScopeNodes().values()) {
 
             // equivalent to final error list
             List<Node> starts = nodeList.stream().filter(node -> node.getType().equals(NodeType.STARTEVENT)).toList();
             // no related edge needed
             List<Edge> errorEdges = new ArrayList<>();
 
-            String scope = this.getScope(nodeList.get(0));
+            String scope = graph.getScope(nodeList.get(0));
 
             int number = starts.size();
 
@@ -353,7 +318,7 @@ public class BPMNChecker {
         for (Node node : nodes.values()) {
 
             List<Node> errorNodes = new ArrayList<>();
-            String scope = this.getScope(node);
+            String scope = graph.getScope(node);
 
             if (node.getType() == NodeType.STARTEVENT && !node.getIncomingEdges().isEmpty()) {
 
@@ -376,7 +341,7 @@ public class BPMNChecker {
         for (Node node : nodes.values()) {
 
             List<Node> errorNodes = new ArrayList<>();
-            String scope = this.getScope(node);
+            String scope = graph.getScope(node);
 
             if (node.getType() == NodeType.ENDEVENT && !node.getOutgoingEdges().isEmpty()) {
 
@@ -410,7 +375,7 @@ public class BPMNChecker {
                 // related edges of "split" = outgoings
                 List<Edge> errorEdges = new ArrayList<>(node.getOutgoingEdges());
 
-                String scope = this.getScope(node);
+                String scope = graph.getScope(node);
 
                 String message = "Non-gateway node '" + node + "' has " + node.getOutgoingEdges().size() +
                         " outgoing flows (implicit split).";
@@ -435,7 +400,7 @@ public class BPMNChecker {
 
                 List<Edge> errorEdges = new ArrayList<>(node.getIncomingEdges());
 
-                String scope = this.getScope(node);
+                String scope = graph.getScope(node);
 
                 String message = "Non-gateway node '" + node + "' has " + node.getIncomingEdges().size() +
                         " incoming flows (implicit join).";
@@ -499,31 +464,22 @@ public class BPMNChecker {
         }
     }
 
-    // GTW-04, with token check
+    // ❓GTW-04, with token check
     // TODO with TokenNode
     public void gtwNestingViolation() {
+        // TODO 检查所有的merge点以及它们前序来的edge来自什么最近split
+        //  1️⃣如果来自两个及两个以上的不同的split则视为一型gtw-04
+        //  2️⃣如果来自同一个分支的部分非完整token，且未归branch没有自己到另一个不同的end-event
 
+        for ()
 
-//                        BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation",
-//                                "General Gateway Errors", scope,
-//                                "Branches of split gateway '" + node.getKey() + "' merge at " + joinKeys.size() + " different join nodes.",
-//                                errorNodes, errorEdges, Severity.WARNING);
-//                        errorList.add(error);
-
-
-//                    BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation",
-//                            "General Gateway Errors", scope,
-//                            "Split gateways: " + nodeKeys + " all merge at the same join node '" + joinKey
-//                                    + "'; the blocks share one exit.",
-//                            errorNodes, new ArrayList<>(), Severity.WARNING);
-//                    errorList.add(error);
     }
 
-    // GTW-05, normal check
+    // ❓GTW-05, normal check
     public void gtwMultipleRoles() {
         for (Node node : nodes.values()) {
             if (node.isGateway() && node.getIncomingEdges().size() > 1 && node.getOutgoingEdges().size() > 1) {
-                String scope = this.getScope(node);
+                String scope = graph.getScope(node);
                 List<Node> errorNodes = new ArrayList<>();
                 List<Edge> errorEdges = new ArrayList<>();
                 errorNodes.add(node);
@@ -538,14 +494,14 @@ public class BPMNChecker {
 
     }
 
-    // GTW-06, normal check
+    // ❓GTW-06, normal check
     public void gtwRedundant() {
 
         for (Node node : nodes.values()) {
 
             List<Node> errorNodes = new ArrayList<>();
             List<Edge> errorEdges = new ArrayList<>();
-            String scope = this.getScope(node);
+            String scope = graph.getScope(node);
 
             if (node.isGateway() && node.getIncomingEdges().size() == 1
                     && node.getOutgoingEdges().size() == 1) {
@@ -566,13 +522,14 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
+    // ❓XOR-01, normal check
     public void xorMissingCondition() {
 
         for (Node node : nodes.values()) {
 
             if (node.getType() == NodeType.EXCLUSIVEGATEWAY) {
 
-                String scope = this.getScope(node);
+                String scope = graph.getScope(node);
 
                 List<Node> errorNode = new ArrayList<>();
 
@@ -609,6 +566,7 @@ public class BPMNChecker {
 // ---------------------------------------------------------------------------------------------------------------------
 
     // TODO new AND-01 logic
+    // ❓AND-01, with token check
     public void andMismatch() {
 
 
@@ -622,6 +580,7 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
+    // ❓OR-01, normal check
     public void orMissingCondition() {
 
         for (Node node : nodes.values()) {
@@ -644,7 +603,7 @@ public class BPMNChecker {
 
                 if (conditionNum < node.getOutgoingEdges().size() - 1) {
 
-                    String scope = this.getScope(node);
+                    String scope = graph.getScope(node);
                     List<Node> errorNodes = new ArrayList<>();
                     errorNodes.add(node);
                     // errorNodes.addAll(reached.keySet());
@@ -664,7 +623,7 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-    // SUB
+    // ❓SUB-01, normal check
     public void subEmptySubprocess() {
         for (Node node : nodes.values()) {
             if (node.getType() == NodeType.SUBGRAPH) {
@@ -674,13 +633,13 @@ public class BPMNChecker {
                 // "Subprocess:[" + node.getLocation() + "]"
                 String scopeName = "Subprocess:[" + subId + "]";
 
-                boolean exist = scopeNodes.containsKey(scopeName);
+                boolean exist = graph.getScopeNodes().containsKey(scopeName);
 
                 if (!exist) {
                     List<Node> errorNodes = new ArrayList<>();
                     errorNodes.add(node);
                     List<Edge> errorEdges = new ArrayList<>();
-                    String scope = this.getScope(node);
+                    String scope = graph.getScope(node);
                     BPMNError error = new BPMNError("SUB-01", "Empty Subprocess",
                             "Subprocess Errors", scope,
                             "Subprocess '" + node.getId() + "' contains no nodes.",
@@ -691,6 +650,7 @@ public class BPMNChecker {
         }
     }
 
+    // ❓SUB-02, normal check
     public void subBoundaryViolation() {
         for (Edge edge : edges) {
 
@@ -705,7 +665,7 @@ public class BPMNChecker {
             if (!Objects.equals(source.getLocation(), target.getLocation())) {
                 List<Node> errorNodes = new ArrayList<>();
 
-                String scope = this.getScope(source);
+                String scope = graph.getScope(source);
                 errorNodes.add(source);
                 errorNodes.add(target);
 
@@ -723,7 +683,7 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-    // LBL
+    // ❓LBL-01, normal check
     public void lblDuplicateName() {
         // label nodes with same label
         LinkedHashMap<String, List<Node>> labelNodes = new LinkedHashMap<>();
@@ -765,7 +725,7 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-    // EDGE
+    // ❓EDGE-01, normal check
     public void edgeDuplicateFlow() {
 
         LinkedHashMap<EdgePair, List<Edge>> sameEdge = new LinkedHashMap<>();
@@ -798,7 +758,7 @@ public class BPMNChecker {
 
                 String scope;
                 if (se.source != null) {
-                    scope = this.getScope(se.source);
+                    scope = graph.getScope(se.source);
                 } else {
                     scope = "There exist other errors!";
                 }
@@ -817,11 +777,11 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-    // LOOP
+    // ❓LOOP-01, reachability, back edge related
     public void loopWithoutReachableEnd() {
         // in a loop, it cant arrive at end event of this scope
         // for one node, endevent is unreachable for it
-        for (List<Node> nodeList : scopeNodes.values()) {
+        for (List<Node> nodeList : graph.getScopeNodes().values()) {
             boolean hasEndevent = false;
             for (Node n : nodeList) {
                 if (n.getType() == NodeType.ENDEVENT) {
@@ -831,7 +791,7 @@ public class BPMNChecker {
             }
 
             if (hasEndevent) {
-                String scope = this.getScope(nodeList.get(0));
+                String scope = graph.getScope(nodeList.get(0));
                 Set<Edge> loopEdges = graph.getScopeBackEdges().get(scope);
 
                 if (!loopEdges.isEmpty()) {
@@ -883,13 +843,13 @@ public class BPMNChecker {
         }
     }
 
-    // and cant be as loop control gateway
+    // ❓LOOP-02, back edge related
     public void loopInvalidGateway() {
 
-        for (List<Node> nodeList : scopeNodes.values()) {
+        for (List<Node> nodeList : graph.getScopeNodes().values()) {
 
-            String scope = this.getScope(nodeList.get(0));
-            Set<Edge> loopEdges = this.getScopeBackEdges().get(scope);
+            String scope = graph.getScope(nodeList.get(0));
+            Set<Edge> loopEdges = this.graph.getScopeBackEdges().get(scope);
 
             for (Edge edge : loopEdges) {
                 Node exitLoop = nodes.get(edge.getSourceKey());
@@ -923,14 +883,6 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-    public LinkedHashMap<String, List<Edge>> getScopeEdges() {
-        return scopeEdges;
-    }
-
-    public void setScopeEdges(LinkedHashMap<String, List<Edge>> scopeEdges) {
-        this.scopeEdges = scopeEdges;
-    }
-
     private static class EdgePair {
         Node source;
         Node target;
@@ -949,89 +901,6 @@ public class BPMNChecker {
         }
     }
 
-    //    private Node branchJoin(Node branchStart, String scope, Set<Edge> loopEdges) {
-//        int balance  = 0;
-//        Node current = branchStart;
-//        Set<String> arrival = new HashSet<>();
-//
-//        while (current != null && arrival.add(current.getKey())) {
-//
-//            if (this.isMerge(current, loopEdges)) {
-//                if (balance == 0) {
-//                    return current;
-//                } else {
-//                    balance--;
-//                }
-//            }
-//
-//            if (this.isSplit(current, loopEdges)) {
-//                balance++;
-//            }
-//
-//            // only deal with edges not in loopEdges
-//            Edge nextEdge = null;
-//            for (Edge edge : current.getOutgoingEdges()) {
-//                if (!loopEdges.contains(edge)) {
-//                    nextEdge = edge;
-//                    break;
-//                }
-//            }
-//
-//            if (nextEdge == null) {
-//                return null;
-//            }
-//
-//
-//            String key = nextEdge.getTargetKey();
-//            Node next = this.nodes.get(key);
-//
-//            // 保证在同一scope中
-//            if (next == null || !this.getScope(next).equals(scope)) {
-//                return null;
-//            }
-//
-//            current = next;
-//
-//        }
-//        return null;
-//    }
-
-
-//    private Node strictMatchingJoin(Node split, Set<Edge> loopEdges) {
-//        String scope = this.getScope(split);
-//        Node target = null;
-//
-//        for (Edge edge : split.getOutgoingEdges()) {
-//
-//            if (loopEdges.contains(edge)) {
-//                continue;
-//            }
-//
-//            Node start = nodes.get(edge.getTargetKey());
-//            Node joinNode;
-//            if (start == null) {
-//                joinNode = null;
-//            } else {
-//                joinNode = this.branchJoin(start, scope, loopEdges);
-//            }
-//
-//            if (joinNode == null) {
-//                continue;
-//            }
-//
-//            if (target == null) {
-//                target = joinNode;
-//                // reachedCount = 1;
-////            } else if (target.getKey().equals(joinNode.getKey())) {
-////                // reachedCount++;
-//            } else if (!target.getKey().equals(joinNode.getKey())) {
-//                return null;
-//            }
-//        }
-//
-//        return target;
-//    }
-
     public LinkedHashMap<String, Node> getNodes() {
         return nodes;
     }
@@ -1048,66 +917,6 @@ public class BPMNChecker {
         this.errorList = errorList;
     }
 
-    public LinkedHashMap<String, List<Node>> getScopeNodes() {
-        return scopeNodes;
-    }
-
-    public void setScopeNodes(LinkedHashMap<String, List<Node>> scopeNodes) {
-        this.scopeNodes = scopeNodes;
-    }
-
-    public LinkedHashMap<String, Set<Edge>> getScopeBackEdges() {
-        return scopeBackEdges;
-    }
-
-    public void setScopeBackEdges(LinkedHashMap<String, Set<Edge>> scopeBackEdges) {
-        this.scopeBackEdges = scopeBackEdges;
-    }
-
-    public LinkedHashMap<Edge, List<TokenLabel>> getEdgeTokens() {
-        return edgeTokens;
-    }
-
-    public void setEdgeTokens(LinkedHashMap<Edge, List<TokenLabel>> edgeTokens) {
-        this.edgeTokens = edgeTokens;
-    }
-
-    public LinkedHashMap<Node, List<TokenLabel>> getNodeTokens() {
-        return nodeTokens;
-    }
-
-    public LinkedHashMap<Node, List<Node>> getMergeMap() {
-        return mergeMap;
-    }
-
-    public void setMergeMap(LinkedHashMap<Node, List<Node>> mergeMap) {
-        this.mergeMap = mergeMap;
-    }
-
-    public LinkedHashMap<Node, List<Node>> getSplitMap() {
-        return splitMap;
-    }
-
-    public void setSplitMap(LinkedHashMap<Node, List<Node>> splitMap) {
-        this.splitMap = splitMap;
-    }
-
-    public LinkedHashMap<Node, List<Edge>> getLoopFreeIn() {
-        return loopFreeIn;
-    }
-
-    public void setLoopFreeIn(LinkedHashMap<Node, List<Edge>> loopFreeIn) {
-        this.loopFreeIn = loopFreeIn;
-    }
-
-    public LinkedHashMap<Node, List<Edge>> getLoopFreeOut() {
-        return loopFreeOut;
-    }
-
-    public void setLoopFreeOut(LinkedHashMap<Node, List<Edge>> loopFreeOut) {
-        this.loopFreeOut = loopFreeOut;
-    }
-
     public ProcessGraph getGraph() {
         return graph;
     }
@@ -1122,10 +931,6 @@ public class BPMNChecker {
 
     public void setTokenLabelEngine(TokenLabelEngine tokenLabelEngine) {
         this.tokenLabelEngine = tokenLabelEngine;
-    }
-
-    private String getScope(Node node) {
-        return this.graph.getScope(node);
     }
 
 }

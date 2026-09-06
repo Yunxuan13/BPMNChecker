@@ -11,9 +11,10 @@ public class TokenLabelEngine {
 
     private ProcessGraph graph;
 
+    // these two will be edited by the existence of dummy
     private LinkedHashMap<Node, List<Edge>> loopFreeIn;
     private LinkedHashMap<Node, List<Edge>> loopFreeOut;
-    private LinkedHashMap<String, Node> nodes;
+
 
     // token states
     private LinkedHashMap<Edge, List<TokenLabel>> edgeTokens;
@@ -21,13 +22,14 @@ public class TokenLabelEngine {
 
     // store each merge point and its merging splits
     private LinkedHashMap<Node, List<Node>> mergeMap;
-    private LinkedHashMap<Node, List<Node>> splitMap;
+    // TODO not fixed, to store edge or branchIndex?
+    private LinkedHashMap<Node, LinkedHashMap<Integer, Set<Node>>> splitMap;
+
 
     public TokenLabelEngine(ProcessGraph graph) {
         this.graph = graph;
         this.loopFreeIn = new LinkedHashMap<>(graph.getLoopFreeIn());
         this.loopFreeOut = new LinkedHashMap<>(graph.getLoopFreeOut());
-        this.nodes = graph.getNodes();
 
         this.edgeTokens = new LinkedHashMap<>();
         this.nodeTokens = new LinkedHashMap<>();
@@ -36,13 +38,12 @@ public class TokenLabelEngine {
 
         for (String scope : graph.getScopeNodes().keySet()) {
             List<Node> nodeList = graph.getScopeNodes().get(scope);
-            Set<Edge> backEdges = graph.getScopeBackEdges().get(scope);
-            this.distributeLabels(nodeList, backEdges);
+            // Set<Edge> backEdges = graph.getScopeBackEdges().get(scope);
+            this.distributeLabels(nodeList);
         }
     }
 
-    private void distributeLabels(List<Node> nodeList, Set<Edge> backEdges) {
-        // 直接在edgeToken上进行更改
+    private void distributeLabels(List<Node> nodeList) {
 
         Set<Node> starts = new HashSet<>();
 
@@ -98,17 +99,17 @@ public class TokenLabelEngine {
                 startVersion.add(label);
 
                 this.nodeTokens.put(currentNode, startVersion);
-
             }
 
-            // 非 start（包括无头） 节点应该带着已有的TokenLabel出现，
-            //  因此在上一级处理的时候应该给下一层Node注入相应的TokenLabel，而后本层仅从Edge开始处理
 
             List<Edge> outgoings = this.loopFreeOut.get(currentNode);
 
             for (int i = 0; i < outgoings.size(); i++) {
+                Edge e = outgoings.get(i);
+
+
                 int index;
-                if (!graph.isSplit(currentNode)) {
+                if (!graph.isLoopFreeSplit(currentNode)) {
                     index = -1;
                 } else {
                     index = i;
@@ -116,14 +117,14 @@ public class TokenLabelEngine {
 
                 List<TokenLabel> all = this.nodeTokens.get(currentNode);
 
-                Edge e = outgoings.get(i);
-                Node next = this.nodes.get(e.getTargetKey());
+
+                Node next = this.graph.getNodes().get(e.getTargetKey());
 
                 Map<Edge, Boolean> states = nodeArrivalTable.get(next);
                 states.put(e, true);
 
                 // 在updateState中先把edge都更新了，再把更新后的存在这里
-                this.updateState(e, currentNode, index, all);
+                this.updateState(e, currentNode, index, all, next);
 
                 if (this.isReady(states)) {
 
@@ -222,6 +223,7 @@ public class TokenLabelEngine {
 
             for (LinkedHashMap<Node, Integer> splits : groups.keySet()) {
                 List<TokenLabel> tokenLabels = groups.get(splits);
+
                 List<Integer> index = this.getIndex(tokenLabels);
 
                 Node split = this.getLastNode(tokenLabels.get(0).getSplits());
@@ -271,12 +273,6 @@ public class TokenLabelEngine {
                     historySplits.put(tokenLabel, beforeMerge);
 
                     if (split.getType() != NodeType.DUMMY) {
-                        List<Node> mergePoints = new ArrayList<>();
-                        if (this.splitMap.containsKey(split)) {
-                            mergePoints = this.splitMap.get(split);
-                        }
-                        mergePoints.add(next);
-                        this.splitMap.put(split, mergePoints);
 
                         // 当前node：next是merge point
                         // 查看那些split在这里merge了
@@ -313,12 +309,11 @@ public class TokenLabelEngine {
     }
 
     // 新用法：这里用于更新edge并返回所有的TokenLabel
-    private void updateState(Edge e, Node currentNode, int i, List<TokenLabel> tokenLabels) {
+    private void updateState(Edge e, Node currentNode, int i, List<TokenLabel> tokenLabels, Node next) {
 
         for (TokenLabel tokenLabel : tokenLabels) {
 
             LinkedHashMap<Node, Integer> splits = new LinkedHashMap<>(tokenLabel.getSplits());
-
 
             if (i > -1) {
                 splits.put(currentNode, i);
@@ -336,6 +331,31 @@ public class TokenLabelEngine {
             }
             labels.add(label);
             this.edgeTokens.put(e, labels);
+
+            // TODO 如果不是dummy，就更新splitMap
+            for (Node split : splits.keySet()) {
+
+                if (split.getType().equals(NodeType.DUMMY)) {
+                    continue;
+                }
+
+                int branch = splits.get(split);
+
+                LinkedHashMap<Integer, Set<Node>> branchArrival = new LinkedHashMap<>();
+                Set<Node> arrivalNode = new HashSet<>();
+
+                if (this.splitMap.containsKey(split)) {
+                    branchArrival = this.splitMap.get(split);
+                    if (branchArrival.containsKey(branch)) {
+                        arrivalNode = branchArrival.get(branch);
+                        arrivalNode.remove(currentNode);
+                    }
+                }
+                arrivalNode.add(next);
+                branchArrival.put(branch, arrivalNode);
+                this.splitMap.put(split, branchArrival);
+
+            }
 
         }
 
@@ -393,19 +413,11 @@ public class TokenLabelEngine {
         this.mergeMap = mergeMap;
     }
 
-    public LinkedHashMap<Node, List<Node>> getSplitMap() {
+    public LinkedHashMap<Node, LinkedHashMap<Integer, Set<Node>>> getSplitMap() {
         return splitMap;
     }
 
-    public void setSplitMap(LinkedHashMap<Node, List<Node>> splitMap) {
+    public void setSplitMap(LinkedHashMap<Node, LinkedHashMap<Integer, Set<Node>>> splitMap) {
         this.splitMap = splitMap;
-    }
-
-    public LinkedHashMap<String, Node> getNodes() {
-        return nodes;
-    }
-
-    public void setNodes(LinkedHashMap<String, Node> nodes) {
-        this.nodes = nodes;
     }
 }

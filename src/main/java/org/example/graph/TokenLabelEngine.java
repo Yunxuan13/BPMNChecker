@@ -15,7 +15,6 @@ public class TokenLabelEngine {
     private LinkedHashMap<Node, List<Edge>> loopFreeIn;
     private LinkedHashMap<Node, List<Edge>> loopFreeOut;
 
-
     // token states
     private LinkedHashMap<Edge, List<TokenLabel>> edgeTokens;
     private LinkedHashMap<Node, List<TokenLabel>> nodeTokens;

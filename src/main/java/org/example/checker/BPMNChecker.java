@@ -465,13 +465,113 @@ public class BPMNChecker {
     }
 
     // ❓GTW-04, with token check
-    // TODO with TokenNode
     public void gtwNestingViolation() {
         // TODO 检查所有的merge点以及它们前序来的edge来自什么最近split
         //  1️⃣如果来自两个及两个以上的不同的split则视为一型gtw-04
         //  2️⃣如果来自同一个分支的部分非完整token，且未归branch没有自己到另一个不同的end-event
 
-        for ()
+        // TODO 每个scope逐个检查
+        for (String scope : graph.getScopeNodes().keySet()) {
+
+            List<Node> nodesInScope = graph.getScopeNodes().get(scope);
+
+            // 找到所有的merge点，查看当前状态（nodeTokens）mergeMap
+            List<Node> joins = nodesInScope.stream().filter(node ->
+               graph.isLoopFreeMerge(node) && !node.getType().equals(NodeType.ENDEVENT)
+            ).toList();
+
+            for (Node join : joins) {
+                List<Edge> incomings = graph.getLoopFreeIn().get(join);
+
+                List<TokenLabel> inLabels = incomings.stream()
+                        // a list of tokenLabels, with flat and final stream()
+                        .flatMap(in -> tokenLabelEngine.getEdgeTokens().get(in).stream())
+                        .toList();
+
+                List<Node> splits = inLabels.stream()
+                        // to another type with map (only one object)
+                        .map(label -> tokenLabelEngine.getLastNode(label.getSplits()))
+                        .filter(split -> split != null && split.getType() != NodeType.DUMMY)
+                        .distinct().toList();
+
+                List<Node> errorNodes = new ArrayList<>();
+                errorNodes.add(join);
+                errorNodes.addAll(splits);
+
+                // TODO 拼edge
+                List<Edge> errorEdges = new ArrayList<>();
+
+                StringBuilder splitReport = new StringBuilder();
+
+                for (int i = 0; i < splits.size(); i++) {
+                    if (i != splits.size() - 1) {
+                        splitReport.append("'").append(splits.get(i)).append("', ");
+                    } else {
+                        splitReport.append("'").append(splits.get(i)).append("'");
+                    }
+
+                }
+
+                // only one split
+                if (splits.size() == 1) {
+                    // whether exists in mergeMap?
+                    if (!tokenLabelEngine.getMergeMap().containsKey(join)) {
+                        // if other not arrival branches arrive at different end event, leave it.
+                        // ONLY ONE SPLIT
+                        Node singleS = splits.get(0);
+                        
+                        LinkedHashMap<Integer, Set<Node>> map = new LinkedHashMap<>(tokenLabelEngine.getSplitMap().get(singleS));
+
+                        // branches that meet at this merge point
+                        List<Integer> meet = inLabels.stream()
+                                .map(label -> {
+                                    Node lastSplit = tokenLabelEngine.getLastNode(label.getSplits());
+                                    return label.getSplits().get(lastSplit);
+                                })
+                                .toList();
+
+                        // TODO check the final point of other branches that didn't meet at this 'join',
+                        //  compare them with all other branches' final point,
+                        //  if any of them matches --> report error
+
+                        // TODO 1: find all final point of branches who meet here
+
+                        Set<Node> mergedFinal = new LinkedHashSet<>();
+                        for (int b : meet) {
+                            mergedFinal.addAll(map.get(b));
+                            // 直接用map，移除之后只剩当前不在的
+                            map.remove(b);
+                        }
+
+                        boolean report = this.isReport(mergedFinal, map);
+
+                        if (report) {
+                            String message = "Merge Node '" + join + "' joins only " + meet.size() +
+                                    " branch(es) of split gateway '" + singleS +
+                                    "', while the other branches could be merged with them afterward. " +
+                                    "There exist violated nesting issues.";
+
+                            BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation", GTW, scope, message
+                                    , errorNodes, errorEdges, Severity.WARNING);
+
+                            errorList.add(error);
+                        }
+                        
+                    }
+                } else if (splits.size() > 1) {
+                    // --> direct report
+                    
+                    String message = "Merge Node '" + join + "' joins " + splits.size() +
+                            " split gateways: [" + splitReport + "], there exist violated nesting issues.";
+
+                    BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation", GTW, scope, message
+                            , errorNodes, errorEdges, Severity.WARNING);
+
+                    errorList.add(error);
+                }
+            }
+
+        }
 
     }
 
@@ -882,6 +982,23 @@ public class BPMNChecker {
     }
 
 // ---------------------------------------------------------------------------------------------------------------------
+
+    private boolean isReport(Set<Node> mergedFinal,LinkedHashMap<Integer, Set<Node>> map) {
+
+        for (Set<Node> others : map.values()) {
+            // 如果相同则直接报，如果不同则判断一下新的是否去了一个end-event，如果不是end-event也报
+            for (Node otherFinal : others) {
+                if (mergedFinal.contains(otherFinal)) {
+                    return true;
+                } else {
+                    if (!otherFinal.getType().equals(NodeType.ENDEVENT)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
 
     private static class EdgePair {
         Node source;

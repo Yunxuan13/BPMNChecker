@@ -6,6 +6,7 @@ import org.example.model.*;
 import org.example.parser.MermaidParser;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class BPMNChecker {
 
@@ -473,10 +474,11 @@ public class BPMNChecker {
 
             // 找到所有的merge点，查看当前状态（nodeTokens）mergeMap
             List<Node> joins = nodesInScope.stream().filter(node ->
-               graph.isLoopFreeMerge(node) && !node.getType().equals(NodeType.ENDEVENT)
+                    graph.isLoopFreeMerge(node) && !node.getType().equals(NodeType.ENDEVENT)
             ).toList();
 
             for (Node join : joins) {
+
                 List<Edge> incomings = graph.getLoopFreeIn().get(join);
 
                 List<TokenLabel> inLabels = incomings.stream()
@@ -509,47 +511,44 @@ public class BPMNChecker {
                 }
 
                 // only one split
-                if (splits.size() == 1) {
-                    // whether exists in mergeMap?
-                    if (!tokenLabelEngine.getMergeMap().containsKey(join)) {
-                        // if other not arrival branches arrive at different end event, leave it.
-                        // ONLY ONE SPLIT
-                        Node singleS = splits.get(0);
-                        
-                        LinkedHashMap<Integer, Set<Node>> map = new LinkedHashMap<>(tokenLabelEngine.getSplitMap().get(singleS));
 
-                        // branches that meet at this merge point
-                        List<Integer> meet = inLabels.stream()
-                                .map(label -> {
-                                    Node lastSplit = tokenLabelEngine.getLastNode(label.getSplits());
-                                    return label.getSplits().get(lastSplit);
-                                })
-                                .toList();
+                if (splits.size() == 1 && !tokenLabelEngine.getCleanMergeMap().containsKey(join)) {
+                    Node singleS = splits.get(0);
 
-                        Set<Node> mergedFinal = new LinkedHashSet<>();
-                        for (int b : meet) {
-                            mergedFinal.addAll(map.get(b));
-                            map.remove(b);
-                        }
+                    LinkedHashMap<Integer, Set<Node>> map = new LinkedHashMap<>(tokenLabelEngine.getSplitMap().get(singleS));
 
-                        boolean report = this.isReport(mergedFinal, map);
+                    // branches that meet at this merge point
+                    List<Integer> meet = inLabels.stream()
+                            .map(label -> {
+                                Node lastSplit = tokenLabelEngine.getLastNode(label.getSplits());
+                                return label.getSplits().get(lastSplit);
+                            })
+                            .distinct()
+                            .toList();
 
-                        if (report) {
-                            String message = "Merge Node '" + join + "' joins only " + meet.size() +
-                                    " branch(es) of split gateway '" + singleS +
-                                    "', while the other branches could be merged with them afterward. " +
-                                    "There exist violated nesting issues.";
-
-                            BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation", GTW, scope, message
-                                    , errorNodes, errorEdges, Severity.WARNING);
-
-                            errorList.add(error);
-                        }
-                        
+                    Set<Node> mergedFinal = new LinkedHashSet<>();
+                    for (int b : meet) {
+                        mergedFinal.addAll(map.get(b));
+                        map.remove(b);
                     }
+
+                    boolean report = this.isReport(mergedFinal, map);
+
+                    if (report) {
+                        String message = "Merge Node '" + join + "' joins only " + meet.size() +
+                                " branch(es) of split gateway '" + singleS +
+                                "', while the other branches could be merged with them afterward. " +
+                                "There exist violated nesting issues.";
+
+                        BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation", GTW, scope, message
+                                , errorNodes, errorEdges, Severity.WARNING);
+
+                        errorList.add(error);
+                    }
+
+
                 } else if (splits.size() > 1) {
-                    // --> direct report
-                    
+
                     String message = "Merge Node '" + join + "' joins " + splits.size() +
                             " split gateways: [" + splitReport + "], there exist violated nesting issues.";
 
@@ -662,16 +661,101 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-    // TODO new AND-01 logic
     // ❓AND-01, with token check
     public void andMismatch() {
 
+        for (String scope : graph.getScopeNodes().keySet()) {
 
-//                BPMNError error = new BPMNError("AND-01", "AND Split and Join Branch Count Mismatch",
-//                        "AND Gateway Errors", scope,
-//                        "Branches of AND split '" + node.getKey() + "' do not synchronize at a single matching AND join.",
-//                        errorNodes, errorEdges, Severity.ERROR);
-//                errorList.add(error);
+            List<Node> nodeInScope = graph.getScopeNodes().get(scope);
+
+            List<Node> parallelMerge = nodeInScope.stream()
+                    .filter(node -> node.getType().equals(NodeType.PARALLELGATEWAY) && getGraph().isLoopFreeMerge(node))
+                    .toList();
+
+            // prepare arrivalTokens (flat)
+            for (Node parallel : parallelMerge) {
+                List<Edge> incomings = graph.getLoopFreeIn().get(parallel);
+
+                List<TokenLabel> arrivals = new ArrayList<>();
+                //LinkedHashMap<TokenLabel, LinkedHashMap<Node, Integer>> allWaySplits = new LinkedHashMap<>();
+
+                for (Edge in : incomings) {
+                    arrivals.addAll(tokenLabelEngine.getEdgeTokens().get(in));
+//                    for (TokenLabel l : tokenLabelEngine.getEdgeTokens().get(in)) {
+//                        allWaySplits.put(l, l.getSplits());
+//                    }
+                }
+
+                LinkedHashMap<Node, Set<Integer>> lasts = this.getLastSplitMap(arrivals);
+
+//                for (TokenLabel label : arrivals) {
+//                    Node last = tokenLabelEngine.getLastNode(label.getSplits());
+//                    int branchIndex = label.getSplits().get(last);
+//                    Set<Integer> branches = new HashSet<>();
+//                    if (lasts.containsKey(last)) {
+//                        branches = lasts.get(last);
+//                    }
+//                    branches.add(branchIndex);
+//                    lasts.put(last, branches);
+//                }
+
+                List<Node> lastSplits = lasts.keySet().stream().toList();
+
+                List<Node> errorNodes = new ArrayList<>();
+
+                // TODO 拼edge
+                List<Edge> errorEdges = new ArrayList<>();
+                StringBuilder builder = new StringBuilder();
+
+                boolean report = false;
+
+                // if only one split, then check only the type: parallel or task which with only condition-free branches
+                if (lastSplits.size() == 1) {
+                    Node split = lastSplits.get(0);
+
+                    boolean isTask = split.getType().equals(NodeType.TASK);
+                    Set<Integer> taskBranches = new HashSet<>();
+
+                    if (!split.getType().equals(NodeType.PARALLELGATEWAY)
+                            && !split.getType().equals(NodeType.DUMMY)) {
+
+                        if (isTask) {
+                            // 如果有带condition的则需要报
+                            taskBranches = this.branchWithConditions(split, lasts.get(split));
+                        }
+
+                        if (!taskBranches.isEmpty() || !isTask) {
+                            errorNodes.add(parallel);
+                            errorNodes.add(split);
+
+                            builder.append("'").append(split).append("'");
+                            report = true;
+                        }
+
+                    }
+                } else if (lastSplits.size() > 1) {
+                    List<Node> issueSplits = this.findIssueSplit(arrivals);
+
+                    if (!issueSplits.isEmpty()) {
+                        errorNodes.add(parallel);
+                        errorNodes.addAll(issueSplits);
+                        report = true;
+                    }
+                }
+
+
+                if (report) {
+                    String message = "Parallel join-gateway '" + parallel + "' has risk not to be activated due to " +
+                            "ancestor-non-parallel-split node: [" + builder + "].";
+
+                    BPMNError error = new BPMNError("AND-01", "AND Join Deadlock Risk", AND, scope, message,
+                            errorNodes, errorEdges, Severity.ERROR);
+
+                    errorList.add(error);
+                }
+
+            }
+        }
 
     }
 
@@ -784,21 +868,23 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-    // ❓LBL-01, normal check
+    // ✅LBL-01, normal check
     public void lblDuplicateName() {
-        // label nodes with same label
+
         LinkedHashMap<String, List<Node>> labelNodes = new LinkedHashMap<>();
 
         for (Node node : nodes.values()) {
 
             if (node.getType() == NodeType.TASK) {
                 String label = node.getLabel();
+
                 if (label != null && !label.isEmpty() && !label.isBlank()) {
 
                     if (!labelNodes.containsKey(label)) {
                         List<Node> nodeList = new ArrayList<>();
                         nodeList.add(node);
                         labelNodes.put(label, nodeList);
+
                     } else {
                         labelNodes.get(label).add(node);
                     }
@@ -807,15 +893,26 @@ public class BPMNChecker {
         }
 
         for (List<Node> ln : labelNodes.values()) {
+
             if (ln.size() > 1) {
-                List<Node> errorNodes = new ArrayList<>(ln);
+
                 List<Edge> errorEdges = new ArrayList<>();
 
-                // cant define scope and we dont really need them
-                BPMNError error = new BPMNError("LBL-01", "Duplicate Activity Name",
-                        "Label Errors", "global",
-                        "Task label '" + ln.get(0).getLabel() + "' is used by " + ln.size() + " different tasks.",
-                        errorNodes, errorEdges, Severity.WARNING);
+                StringBuilder s = new StringBuilder();
+
+                for (int i = 0; i < ln.size(); i++) {
+                    if (i == 0) {
+                        s.append("'").append(ln.get(i)).append("'");
+                    } else {
+                        s.append(", '").append(ln.get(i)).append("'");
+                    }
+                }
+
+                String message = "Task label '" + ln.get(0).getLabel() + "' is repeatedly used by tasks: [" + s + "].";
+                String scope = "global";
+
+                BPMNError error = new BPMNError("LBL-01", "Duplicate Activity Name", LBL, scope, message,
+                        ln, errorEdges, Severity.WARNING);
 
                 errorList.add(error);
             }
@@ -824,50 +921,44 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-    // ❓EDGE-01, normal check
+    // ✅EDGE-01, normal check
     public void edgeDuplicateFlow() {
 
-        LinkedHashMap<EdgePair, List<Edge>> sameEdge = new LinkedHashMap<>();
+        LinkedHashMap<String, List<Edge>> sameEdge = new LinkedHashMap<>();
 
         for (Edge edge : edges) {
-            EdgePair e = new EdgePair();
-            e.source = nodes.get(edge.getSourceKey());
-            e.target = nodes.get(edge.getTargetKey());
-            if (!sameEdge.containsKey(e)) {
+
+            String key = edge.getSourceKey() + edge.getTargetKey();
+            if (!sameEdge.containsKey(key)) {
                 List<Edge> edgeList = new ArrayList<>();
                 edgeList.add(edge);
-                sameEdge.put(e, edgeList);
+                sameEdge.put(key, edgeList);
             } else {
-                sameEdge.get(e).add(edge);
+                sameEdge.get(key).add(edge);
             }
         }
 
-        for (EdgePair se : sameEdge.keySet()) {
-            if (sameEdge.get(se).size() > 1) {
+        for (String key : sameEdge.keySet()) {
+
+            if (sameEdge.get(key).size() > 1) {
+
+                Edge edge = sameEdge.get(key).get(0);
+                Node source = nodes.get(edge.getSourceKey());
+                Node target = nodes.get(edge.getTargetKey());
+
                 List<Node> errorNodes = new ArrayList<>();
-                List<Edge> errorEdges = new ArrayList<>(sameEdge.get(se));
+                List<Edge> errorEdges = sameEdge.get(key);
 
-                if (se.source != null) {
-                    errorNodes.add(se.source);
-                }
+                errorNodes.add(source);
+                errorNodes.add(target);
 
-                if (se.target != null) {
-                    errorNodes.add(se.target);
-                }
+                String scope = "global";
 
-                String scope;
-                if (se.source != null) {
-                    scope = graph.getScope(se.source);
-                } else {
-                    scope = "There exist other errors!";
-                }
+                String message = errorEdges.size() + " sequence flows are between '" + source + "' and '" + target
+                        + "', which is redundant.";
 
-
-                // cant define scope and we dont really need them
                 BPMNError error = new BPMNError("EDGE-01", "Duplicate Sequence Flow",
-                        "Edge Errors", scope,
-                        errorEdges.size() + " sequence flows connect '" + errorEdges.get(0).getSourceKey() + "' to '" + errorEdges.get(0).getTargetKey() + "' (redundant: multiple flows to the same target add no routing effect).",
-                        errorNodes, errorEdges, Severity.WARNING);
+                        EDGE, scope, message, errorNodes, errorEdges, Severity.WARNING);
 
                 errorList.add(error);
             }
@@ -876,12 +967,13 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-    // ❓LOOP-01, reachability, back edge related
+    // ✅LOOP-01, reachability, back edge related
     public void loopWithoutReachableEnd() {
-        // in a loop, it cant arrive at end event of this scope
-        // for one node, endevent is unreachable for it
+
         for (List<Node> nodeList : graph.getScopeNodes().values()) {
+
             boolean hasEndevent = false;
+
             for (Node n : nodeList) {
                 if (n.getType() == NodeType.ENDEVENT) {
                     hasEndevent = true;
@@ -890,27 +982,24 @@ public class BPMNChecker {
             }
 
             if (hasEndevent) {
+
                 String scope = graph.getScope(nodeList.get(0));
-                Set<Edge> loopEdges = graph.getScopeBackEdges().get(scope);
 
-                if (!loopEdges.isEmpty()) {
-                    Set<String> keys = new HashSet<>();
-                    for (Node n : nodeList) {
-                        keys.add(n.getKey());
-                    }
+                Set<Edge> backEdges = graph.getScopeBackEdges().get(scope);
 
-                    List<Edge> edgesInScope = new ArrayList<>();
-                    for (Edge edge : edges) {
-                        if (keys.contains(edge.getSourceKey()) && keys.contains(edge.getTargetKey())) {
-                            edgesInScope.add(edge);
-                        }
-                    }
+                if (!backEdges.isEmpty()) {
+
+                    List<Edge> edgesInScope = graph.getScopeEdges().get(scope);
 
                     Set<String> result = new HashSet<>();
 
-                    for (Edge loop : loopEdges) {
+                    for (Edge loop : backEdges) {
+
+                        // find all reachable node from loop-start
                         Node enterNode = nodes.get(loop.getTargetKey());
+
                         if (enterNode != null && !result.contains(enterNode.getKey())) {
+
                             List<Node> reachable = this.graph.getArrival(edgesInScope, enterNode);
                             boolean canReachEnd = false;
 
@@ -922,17 +1011,21 @@ public class BPMNChecker {
                             }
 
                             if (!canReachEnd) {
+
                                 result.add(enterNode.getKey());
+
                                 List<Node> errorNodes = new ArrayList<>();
                                 errorNodes.add(enterNode);
 
                                 List<Edge> errorEdges = new ArrayList<>();
                                 errorEdges.add(loop);
 
+                                String message = "Loop entered at '" + enterNode +
+                                        "' cannot reach any end event in its scope. It is a live lock.";
+
                                 BPMNError error = new BPMNError("LOOP-01", "Loop Without Reachable End Event",
-                                        "Loop Errors", scope,
-                                        "Loop entered at '" + enterNode.getKey() + "' cannot reach any end event in its scope (livelock / infinite loop).",
-                                        errorNodes, errorEdges, Severity.ERROR);
+                                        LOOP, scope, message, errorNodes, errorEdges, Severity.ERROR);
+
                                 errorList.add(error);
                             }
                         }
@@ -942,7 +1035,7 @@ public class BPMNChecker {
         }
     }
 
-    // ❓LOOP-02, back edge related
+    // ✅LOOP-02, back edge related
     public void loopInvalidGateway() {
 
         for (List<Node> nodeList : graph.getScopeNodes().values()) {
@@ -951,29 +1044,28 @@ public class BPMNChecker {
             Set<Edge> loopEdges = this.graph.getScopeBackEdges().get(scope);
 
             for (Edge edge : loopEdges) {
+
                 Node exitLoop = nodes.get(edge.getSourceKey());
                 Node enterLoop = nodes.get(edge.getTargetKey());
 
-                boolean and = (exitLoop!= null && exitLoop.getType() == NodeType.PARALLELGATEWAY)
-                        || (enterLoop != null && enterLoop.getType() == NodeType.PARALLELGATEWAY);
+                boolean parallel = exitLoop.getType() == NodeType.PARALLELGATEWAY
+                        || enterLoop.getType() == NodeType.PARALLELGATEWAY;
 
-                if (and) {
+                if (parallel) {
+
                     List<Node> errorNodes = new ArrayList<>();
-                    if (exitLoop != null) {
-                        errorNodes.add(exitLoop);
-                    }
-
-                    if (enterLoop != null) {
-                        errorNodes.add(enterLoop);
-                    }
+                    errorNodes.add(exitLoop);
+                    errorNodes.add(enterLoop);
 
                     List<Edge> errorEdges = new ArrayList<>();
                     errorEdges.add(edge);
 
+                    String message = "Loop with back-edge '" + exitLoop + "' to '" +
+                            enterLoop + "' is controlled by a parallel (AND) gateway.";
+
                     BPMNError error = new BPMNError("LOOP-02", "Loop Controlled by AND Gateway",
-                            "Loop Errors", scope,
-                            "Loop back-edge from '" + edge.getSourceKey() + "' to '" + edge.getTargetKey() + "' is controlled by a parallel (AND) gateway.",
-                            errorNodes, errorEdges, Severity.ERROR);
+                            LOOP, scope, message, errorNodes, errorEdges, Severity.ERROR);
+
                     errorList.add(error);
                 }
             }
@@ -981,6 +1073,64 @@ public class BPMNChecker {
     }
 
 // ---------------------------------------------------------------------------------------------------------------------
+
+    // private Set<Integer> branchWithConditions(Node split, List<TokenLabel> tokenLabels) {
+    private Set<Integer> branchWithConditions(Node split, Set<Integer> lasts) {
+        // boolean noWay = false;
+        //Set<Integer> index = lasts.get(split);
+        LinkedHashMap<Integer, Boolean> conditionStates = graph.getConditionSplitTask().get(split);
+
+        return lasts.stream()
+                .filter(integer -> conditionStates.containsKey(integer) && conditionStates.get(integer))
+                .collect(Collectors.toSet());
+    }
+
+    private LinkedHashMap<Node, Set<Integer>> getLastSplitMap(List<TokenLabel> tokenLabels) {
+
+        LinkedHashMap<Node, Set<Integer>> lasts = new LinkedHashMap<>();
+
+        for (TokenLabel label : tokenLabels) {
+            Node last = tokenLabelEngine.getLastNode(label.getSplits());
+            addToPair(lasts, label, last);
+        }
+
+        return lasts;
+    }
+
+    private LinkedHashMap<Node, Set<Integer>> getSplitAllTogether(List<TokenLabel> tokenLabels) {
+        LinkedHashMap<Node, Set<Integer>> splits = new LinkedHashMap<>();
+
+        for (TokenLabel label : tokenLabels) {
+
+            for (Node node : label.getSplits().keySet()) {
+                addToPair(splits, label, node);
+            }
+
+        }
+
+        return splits;
+    }
+
+    private void addToPair(LinkedHashMap<Node, Set<Integer>> splits, TokenLabel label, Node node) {
+        int branchIndex = label.getSplits().get(node);
+        Set<Integer> branches = new HashSet<>();
+        if (splits.containsKey(node)) {
+            branches = splits.get(node);
+        }
+        branches.add(branchIndex);
+        splits.put(node, branches);
+    }
+
+
+    private boolean hasCondition(Node node, List<TokenLabel> tokenLabels, boolean onlyLast) {
+        if (!onlyLast) {
+            return !this.branchWithConditions(node, this.getSplitAllTogether(tokenLabels).get(node)).isEmpty();
+        } else {
+            return !this.branchWithConditions(node, this.getLastSplitMap(tokenLabels).get(node)).isEmpty();
+        }
+
+
+    }
 
     private boolean isReport(Set<Node> mergedFinal,LinkedHashMap<Integer, Set<Node>> map) {
 
@@ -999,22 +1149,77 @@ public class BPMNChecker {
         return false;
     }
 
-    private static class EdgePair {
-        Node source;
-        Node target;
+    private List<Node> findIssueSplit(List<TokenLabel> tokenLabels) {
 
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            EdgePair edgePair = (EdgePair) o;
-            return Objects.equals(source, edgePair.source) && Objects.equals(target, edgePair.target);
+        // TODO 1. 找共同的祖先
+
+        // tokenLabel <-> getSplits()
+        Set<Node> issues = new LinkedHashSet<>();
+
+        // 在比较的时候需要额外比较ancestor的branch是否一致
+        Node ancestor = null;
+
+        TokenLabel shortest = tokenLabels.stream()
+                .min(Comparator.comparingInt(tokenLabel -> tokenLabel.getSplits().size()))
+                .orElse(tokenLabels.get(0));
+
+
+        for (Node split : shortest.getSplits().keySet()) {
+            boolean exist = true;
+            for (TokenLabel other : tokenLabels) {
+                if (other.equals(shortest)) {
+                    continue;
+                }
+                if (!other.getSplits().containsKey(split)) {
+                    exist = false;
+                    break;
+                }
+            }
+            if (exist) {
+                ancestor = split;
+            }
         }
 
-        @Override
-        public int hashCode() {
-            return Objects.hash(source, target);
+        Set<Node> between = new LinkedHashSet<>();
+
+        for (TokenLabel label : tokenLabels) {
+
+            boolean start = false;
+            for (Node node : label.getSplits().keySet()) {
+                if (!start) {
+                    if (node == ancestor) {
+                        start = true;
+                    }
+                }
+
+                if (start) {
+                    if (node != ancestor) {
+                        between.add(node);
+                    }
+                }
+            }
         }
+
+        Set<Integer> ancestorIndex = this.getSplitAllTogether(tokenLabels).get(ancestor);
+
+        // ancestor in report: not parallel, not dummy, if task has edge with condition
+        if (ancestor != null && !ancestor.getType().equals(NodeType.DUMMY)) {
+            if ((!ancestor.getType().equals(NodeType.PARALLELGATEWAY)
+                    && !(ancestor.getType().equals(NodeType.TASK) && !this.hasCondition(ancestor, tokenLabels, false)))
+                    && ancestorIndex.size() > 1) {
+                issues.add(ancestor);
+
+            }
+        }
+
+        for (Node node : between) {
+            if ((!node.getType().equals(NodeType.PARALLELGATEWAY)
+                    && !(node.getType().equals(NodeType.TASK) && !this.hasCondition(node, tokenLabels, false)))) {
+                issues.add(node);
+            }
+        }
+
+        return issues.stream().toList();
     }
 
     public LinkedHashMap<String, Node> getNodes() {

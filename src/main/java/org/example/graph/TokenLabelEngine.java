@@ -20,8 +20,8 @@ public class TokenLabelEngine {
     private LinkedHashMap<Node, List<TokenLabel>> nodeTokens;
 
     // store each merge point and its merging splits
-    private LinkedHashMap<Node, List<Node>> mergeMap;
-    // TODO not fixed, to store edge or branchIndex?
+    private LinkedHashMap<Node, List<Node>> CleanMergeMap;
+    // private LinkedHashMap<Node, LinkedHashMap<Node, Set<Integer>>> behavioralMergeMap;
     private LinkedHashMap<Node, LinkedHashMap<Integer, Set<Node>>> splitMap;
 
 
@@ -32,12 +32,12 @@ public class TokenLabelEngine {
 
         this.edgeTokens = new LinkedHashMap<>();
         this.nodeTokens = new LinkedHashMap<>();
-        this.mergeMap = new LinkedHashMap<>();
+        this.CleanMergeMap = new LinkedHashMap<>();
+        // this.behavioralMergeMap = new LinkedHashMap<>();
         this.splitMap = new LinkedHashMap<>();
 
         for (String scope : graph.getScopeNodes().keySet()) {
             List<Node> nodeList = graph.getScopeNodes().get(scope);
-            // Set<Edge> backEdges = graph.getScopeBackEdges().get(scope);
             this.distributeLabels(nodeList);
         }
     }
@@ -116,7 +116,6 @@ public class TokenLabelEngine {
 
                 List<TokenLabel> all = this.nodeTokens.get(currentNode);
 
-
                 Node next = this.graph.getNodes().get(e.getTargetKey());
 
                 Map<Edge, Boolean> states = nodeArrivalTable.get(next);
@@ -125,9 +124,11 @@ public class TokenLabelEngine {
                 // 在updateState中先把edge都更新了，再把更新后的存在这里
                 this.updateState(e, currentNode, index, all, next);
 
+
+
                 if (this.isReady(states)) {
 
-                    if (graph.isMerge(next)) {
+                    if (graph.isLoopFreeMerge(next)) {
                         List<Edge> in = loopFreeIn.get(next);
                         this.merge(next, in);
 
@@ -267,7 +268,6 @@ public class TokenLabelEngine {
                     }
 
 
-
                     TokenLabel tokenLabel = new TokenLabel(branchIndex, history.stream().toList(),beforeMerge);
                     historySplits.put(tokenLabel, beforeMerge);
 
@@ -276,15 +276,13 @@ public class TokenLabelEngine {
                         // 当前node：next是merge point
                         // 查看那些split在这里merge了
                         List<Node> mergedSplits = new ArrayList<>();
-                        if (this.mergeMap.containsKey(next)) {
-                            mergedSplits = this.mergeMap.get(next);
+                        if (this.CleanMergeMap.containsKey(next)) {
+                            mergedSplits = this.CleanMergeMap.get(next);
                         }
                         mergedSplits.add(split);
-                        this.mergeMap.put(next, mergedSplits);
+                        this.CleanMergeMap.put(next, mergedSplits);
                     }
-
                 }
-
             }
         }
 
@@ -404,12 +402,12 @@ public class TokenLabelEngine {
         this.nodeTokens = nodeTokens;
     }
 
-    public LinkedHashMap<Node, List<Node>> getMergeMap() {
-        return mergeMap;
+    public LinkedHashMap<Node, List<Node>> getCleanMergeMap() {
+        return CleanMergeMap;
     }
 
-    public void setMergeMap(LinkedHashMap<Node, List<Node>> mergeMap) {
-        this.mergeMap = mergeMap;
+    public void setCleanMergeMap(LinkedHashMap<Node, List<Node>> mergeMap) {
+        this.CleanMergeMap = mergeMap;
     }
 
     public LinkedHashMap<Node, LinkedHashMap<Integer, Set<Node>>> getSplitMap() {

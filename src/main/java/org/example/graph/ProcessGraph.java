@@ -20,6 +20,9 @@ public class ProcessGraph {
     private LinkedHashMap<Node, List<Edge>> loopFreeIn;
     private LinkedHashMap<Node, List<Edge>> loopFreeOut;
 
+    // have to ensure each branch index follows the outgoing edges' sequence
+    private LinkedHashMap<Node, LinkedHashMap<Integer, Boolean>> conditionSplitTask;
+
     public ProcessGraph(LinkedHashMap<String, Node> nodes, List<Edge> edges) {
         this.nodes = nodes;
         this.edges = edges;
@@ -29,12 +32,14 @@ public class ProcessGraph {
         this.scopeEdges = new LinkedHashMap<>();
         this.loopFreeIn = new LinkedHashMap<>();
         this.loopFreeOut = new LinkedHashMap<>();
+        this.conditionSplitTask = new LinkedHashMap<>();
 
         this.setGraphs();
         this.buildScopeNodes();
         this.buildScopeEdges();
         this.buildScopeBackEdges();
         this.buildLoopFreeEdges();
+        this.buildConditionSplitTask();
 
     }
 
@@ -176,6 +181,10 @@ public class ProcessGraph {
     }
 
     private void buildScopeEdges() {
+        for (String scope : this.scopeNodes.keySet()) {
+            this.scopeEdges.put(scope, new ArrayList<>());
+        }
+
         for (Edge edge : edges) {
             Node source = this.nodes.get(edge.getSourceKey());
             Node target = this.nodes.get(edge.getTargetKey());
@@ -188,6 +197,28 @@ public class ProcessGraph {
                 }
                 edgesInScope.add(edge);
                 scopeEdges.put(scope, edgesInScope);
+            }
+        }
+    }
+
+    private void buildConditionSplitTask() {
+
+        for (String scope : scopeNodes.keySet()) {
+            List<Node> splitTasks = scopeNodes.get(scope).stream()
+                    .filter(node -> this.isLoopFreeSplit(node) && node.getType().equals(NodeType.TASK))
+                    .toList();
+
+            for (Node task : splitTasks) {
+                List<Edge> outgoingEdges = this.getLoopFreeOut().get(task);
+                LinkedHashMap<Integer, Boolean> conditions = new LinkedHashMap<>();
+
+                for (int i = 0; i < outgoingEdges.size(); i++) {
+                    Edge out = outgoingEdges.get(i);
+                    boolean hasCondition = out.getCondition() != null && !out.getCondition().isBlank();
+                    conditions.put(i, hasCondition);
+                }
+
+                conditionSplitTask.put(task, conditions);
             }
         }
     }
@@ -298,5 +329,13 @@ public class ProcessGraph {
 
     public void setScopeEdges(LinkedHashMap<String, List<Edge>> scopeEdges) {
         this.scopeEdges = scopeEdges;
+    }
+
+    public LinkedHashMap<Node, LinkedHashMap<Integer, Boolean>> getConditionSplitTask() {
+        return conditionSplitTask;
+    }
+
+    public void setConditionSplitTask(LinkedHashMap<Node, LinkedHashMap<Integer, Boolean>> conditionSplitTask) {
+        this.conditionSplitTask = conditionSplitTask;
     }
 }

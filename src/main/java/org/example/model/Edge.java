@@ -10,7 +10,7 @@ public class Edge {
     // if node is a subprocess:
     private final String sourceKey;
     private final String targetKey;
-    private String condition;
+    private final String condition;
 
     public Edge(String sourceKey, String condition, String targetKey) {
         this.sourceKey = sourceKey;
@@ -21,6 +21,7 @@ public class Edge {
     public Edge(String sourceName, String targetKey) {
         this.sourceKey = sourceName;
         this.targetKey = targetKey;
+        this.condition = null;
     }
 
     public String getSourceKey() {

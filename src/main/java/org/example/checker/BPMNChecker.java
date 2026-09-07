@@ -511,7 +511,6 @@ public class BPMNChecker {
                 }
 
                 // only one split
-
                 if (splits.size() == 1 && !tokenLabelEngine.getCleanMergeMap().containsKey(join)) {
                     Node singleS = splits.get(0);
 
@@ -677,27 +676,12 @@ public class BPMNChecker {
                 List<Edge> incomings = graph.getLoopFreeIn().get(parallel);
 
                 List<TokenLabel> arrivals = new ArrayList<>();
-                //LinkedHashMap<TokenLabel, LinkedHashMap<Node, Integer>> allWaySplits = new LinkedHashMap<>();
 
                 for (Edge in : incomings) {
                     arrivals.addAll(tokenLabelEngine.getEdgeTokens().get(in));
-//                    for (TokenLabel l : tokenLabelEngine.getEdgeTokens().get(in)) {
-//                        allWaySplits.put(l, l.getSplits());
-//                    }
                 }
 
                 LinkedHashMap<Node, Set<Integer>> lasts = this.getLastSplitMap(arrivals);
-
-//                for (TokenLabel label : arrivals) {
-//                    Node last = tokenLabelEngine.getLastNode(label.getSplits());
-//                    int branchIndex = label.getSplits().get(last);
-//                    Set<Integer> branches = new HashSet<>();
-//                    if (lasts.containsKey(last)) {
-//                        branches = lasts.get(last);
-//                    }
-//                    branches.add(branchIndex);
-//                    lasts.put(last, branches);
-//                }
 
                 List<Node> lastSplits = lasts.keySet().stream().toList();
 
@@ -1076,8 +1060,7 @@ public class BPMNChecker {
 
     // private Set<Integer> branchWithConditions(Node split, List<TokenLabel> tokenLabels) {
     private Set<Integer> branchWithConditions(Node split, Set<Integer> lasts) {
-        // boolean noWay = false;
-        //Set<Integer> index = lasts.get(split);
+
         LinkedHashMap<Integer, Boolean> conditionStates = graph.getConditionSplitTask().get(split);
 
         return lasts.stream()
@@ -1150,8 +1133,6 @@ public class BPMNChecker {
     }
 
     private List<Node> findIssueSplit(List<TokenLabel> tokenLabels) {
-
-        // TODO 1. 找共同的祖先
 
         // tokenLabel <-> getSplits()
         Set<Node> issues = new LinkedHashSet<>();

@@ -1,6 +1,5 @@
 package org.example.reporter;
 
-import org.example.Main;
 import org.example.model.*;
 import org.example.parser.MermaidParser;
 import org.example.repair.SuggestionBuilder;
@@ -24,7 +23,6 @@ public class JsonReporter {
 
         int errorCount = 0;
         int warningCount = 0;
-        // int infoCount = 0;
 
         for (BPMNError error : errorList) {
             if (error.getSeverity() == Severity.ERROR) {
@@ -75,7 +73,7 @@ public class JsonReporter {
 
     private static List<JsonNode> getJsonNodes(BPMNError error) {
         List<JsonNode> errorNodes = new ArrayList<>();
-        for (Node node : error.getNode()) {
+        for (Node node : error.getNodes()) {
             JsonNode n = new JsonNode();
             n.setKey(node.getKey());
             n.setLabel(node.getLabel());

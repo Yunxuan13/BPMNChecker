@@ -428,6 +428,8 @@ public class BPMNChecker {
 
             int num = 0;
             Set<Node> errorNodes = new LinkedHashSet<>();
+            errorNodes.add(gateway);
+
             Set<Edge> errorEdges = new LinkedHashSet<>();
 
 
@@ -498,7 +500,7 @@ public class BPMNChecker {
 
                 Set<Edge> errorEdges = this.nmixxEdge(inLabels, join);
 
-                String splitReport = this.nmixxNode(splits);
+                String splitReport = this.nmixxNode(errorNodes);
 
                 // only one split
                 if (splits.size() == 1 && !tokenLabelEngine.getCleanMergeMap().containsKey(join)) {
@@ -715,7 +717,7 @@ public class BPMNChecker {
                         errorNodes.add(parallel);
                         errorNodes.addAll(issueSplits);
 
-                        builder = new StringBuilder(this.nmixxNode(issueSplits));
+                        builder = new StringBuilder(this.nmixxNode(errorNodes));
 
                         report = true;
                     }
@@ -1053,7 +1055,7 @@ public class BPMNChecker {
     private String nmixxNode(List<Node> splits) {
         StringBuilder splitReport = new StringBuilder();
 
-        for (int i = 0; i < splits.size(); i++) {
+        for (int i = 1; i < splits.size(); i++) {
             if (i != splits.size() - 1) {
                 splitReport.append("'").append(splits.get(i)).append("', ");
             } else {

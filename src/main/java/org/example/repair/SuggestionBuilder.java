@@ -8,114 +8,152 @@ import java.util.List;
 
 public final class SuggestionBuilder {
 
+
     public static String suggest (BPMNError error) {
+
         // main error node
-        String key = nodeKey(error, 0);
-
-
-
-        switch (error.getErrorId()) {
-            // Isolated Node
-            case "CON-01":
-                return "Connect '" + key + "' to the process, add an incoming sequence flow " +
-                        "from a preceding element and an outgoing flow to a following one, " +
-                        "or remove the node if it is not needed.";
-            // missing  incoming
-            case "CON-02":
-                return "Add an incoming sequence flow to '" + key +
-                        "' from a preceding element (for example the start event or an upstream task).";
-            // missing outgoing
-            case "CON-03":
-                return "Add an outgoing sequence flow from '" + key +
-                        "' to a following element (for example the next task or an end event).";
-            // unreachable
-            case "CON-04":
-                return "Connect '" + key + "' to the flow so it becomes reachable from start, " +
-                        "or remove it if it is not needed.";
-            // end event unreachable from start
-            case "CON-05":
-                return "Create a path from a start event to end event '" + key + "', " +
-                        "look for missing or misdirected sequence flows on the way.";
-            // missing start
-            case "SE-01":
-                return "Declare a start event in this scope and connect it to the first element of the flow.";
-            // missing end
-            case "SE-02":
-                return "Declare an end event in this scope and connect the final element of the flow to it.";
-            // multiple start
-            case "SE-03":
-                return "Keep a single start event in this scope; if the extra start events mark alternative entries, " +
-                        "merge them into one start event followed by a gateway.";
-            // start with in
-            case "SE-04":
-                return "Remove the incoming sequence flow(s) of start event '" + key + "'.";
-            // end with out
-            case "SE-05":
-                return "Remove the outgoing sequence flow(s) of end event '" + key + "'.";
-            // implicit split
-            case "GTW-01":
-                return "Insert an explicit gateway after '" + key + "' and move its multiple outgoing flows onto that gateway.";
-            // implicit merge
-            case "GTW-02":
-                return "Insert an explicit gateway before '" + key + "' and move its multiple incoming flows through that gateway.";
-            // mismatched
-            case "GTW-03":
-                return "Make the gateway types same of this block: split '"+ key + "' and join '" + nodeKey(error, 1) + "'.";
-            // nested
-            case "GTW-04":
-                return "Restructure the branches of split '" + key + "' so they all merge at a single join gateway before the block closes.";
-            // both split and join
-            case "GTW-05":
-                return "Split gateway '" + key + "' into two: one gateway that only joins the incoming flows, " +
-                        "then followed by one that only splits the outgoing flows.";
-            // redundant
-            case "GTW-06":
-                return "Remove gateway '" + key + "' and connect its incoming flow's source directly to its outgoing flow's target.";
-            // missing condition
-            case "XOR-01":
-                return "Add a condition label to each unlabelled outgoing flow of XOR gateway '" + key +
-                        "' (syntax: '-->|condition|'); at most one flow may stay unlabelled as the default.";
-            // branch mismatch
-            case "AND-01":
-                return "Rebalance the split parallel gateway '" + key + "', let every branch leaving the split reach one matching AND join, " +
-                        "adding the missing branch flows or removing extra ones.";
-            // missing condition
-            case "OR-01":
-                return "Add a condition label to each unlabelled outgoing flow of OR gateway '" + key +
-                        "' (syntax: '-->|condition|'); at most one flow may stay unlabelled as the default.";
-            // empty
-            case "SUB-01":
-                return "Nothing to change here. (It is acceptable, if subprocess is in form 'id:subprocess:(label)')";
-            // boundary
-            case "SUB-02":
-                return "Remove the sequence flow from '" + edgeSource(error) + "' to '" + edgeTarget(error) +
-                        "' that crosses the subprocess boundary.";
-            // duplicate
-            case "LBL-01":
-                return "Rename the duplicated activities so that each activity label is unique.";
-            // duplicate
-            case "EDGE-01":
-                return "Remove the duplicate sequence flow between '" + edgeSource(error) + "' and '" + edgeTarget(error) +
-                        "', keeping a single flow.";
-            // no reachable end
-            case "LOOP-01":
-                return "Add an exit to the loop entered at '" + key +
-                        "', for example give one gateway inside the loop a conditional flow that leads towards an end event.";
-            // and as loop gateway
-            case "LOOP-02":
-                return "Let an exclusive gateway control the loop between '" + edgeSource(error) + "' and '" +
-                        edgeTarget(error) + "' instead of a parallel gateway.";
-            default:
-                return null;
+        // String key = nodeKey(error, 0);
+        String node = "";
+        if (error.getNodes() != null && !error.getNodes().isEmpty()) {
+            node = error.getNodes().get(0).toString();
         }
+
+        String startWords = "Please take a look at the \"Error-Message\", find out the issues and you try to repair them. " +
+                "Followings are some suggestions to each kind of issue, you should first read the original prompt and process description carefully, " +
+                "then try to repair them with help of suggestions if it fits the requirements. ";
+
+        StringBuilder suggestion = new StringBuilder();
+        suggestion.append(startWords).append("\nSuggestion: ");
+
+        String body = switch (error.getErrorId()) {
+
+            // ✅Isolated Node
+            case "CON-01" -> "connect '" + node + "' to the process, " +
+                    "either according to the process description, add an incoming sequence flow " +
+                    "from a preceding element and an outgoing flow to a following one, " +
+                    "or remove the node if it is not needed.";
+
+            // ✅missing incoming
+            case "CON-02" -> "Try to add an incoming sequence flow to '" + node +
+                    "' from a preceding element. Keep the original meaning in process description.";
+
+            // ✅missing outgoing
+            case "CON-03" -> "Try to add an outgoing sequence flow from '" + node +
+                    "' to a following element. Keep the original meaning in process description.";
+
+            // ✅unreachable
+            case "CON-04" -> "Try connect '" + node + "' to the flow so it becomes reachable from start, " +
+                    "or remove it if it is not needed.";
+
+            // ✅end event unreachable from start
+            case "CON-05" -> "Try to create a path from a start event to end event '" + node + "', " +
+                    "look for missing or misdirected sequence flows on the way.";
+
+            // ✅missing start
+            case "SE-01" -> "Declare a start event in this scope and connect it to the first element of the flow.";
+
+            // ✅missing end
+            case "SE-02" -> "Declare an end event in this scope and connect the final element of the flow to it.";
+
+            // ✅multiple start
+            case "SE-03" ->
+                    "Keep only single start event in this scope.";
+
+            // ✅start with in
+            case "SE-04" -> "Remove the incoming sequence flow(s) of start event '" + node + "'.";
+
+            // ✅end with out
+            case "SE-05" -> "Remove the outgoing sequence flow(s) of end event '" + node + "'.";
+
+            // ✅implicit split
+            case "GTW-01" -> "Any non-gateway node shouldn't have more than one outgoing sequence flows. " +
+                    "Insert an appropriate gateway after '" + node + "' and move its multiple outgoing flows onto that gateway.";
+
+            // ✅implicit merge
+            case "GTW-02" -> "Any non-gateway node shouldn't have more than one incoming sequence flows. " +
+                    "Insert an appropriate gateway before '" + node + "' and move its multiple incoming flows through that gateway.";
+
+            // ✅mismatched
+            case "GTW-03" -> "The type of the splits (" + getCompactNode(error) + ") merging at the join gateway '"
+                    + node + "' should keep the same as the join." +
+                    "Please keep, any split gateway is only merged at the paired, same-type, single join gateway.";
+
+            // ✅nested
+            case "GTW-04" ->
+                    "Restructure the blocks that violated the single-enter single-exit. Join gateway '" + node +
+                            "' should not merge more than two split gateways, but there are: [" + getCompactNode(error) +
+                            "]. Try to close inner block before merging outer blocks, many splits merge at one join gateway is also not recommended.";
+
+            // ✅both split and join
+            case "GTW-05" -> "Gateway '" + node + "' played two roles (split and join). " +
+                    "Try to add a split gateway after it and carry on the outgoing sequence flows of it. " +
+                    "This current gateway keep the merging function, add a single sequence flow from current to the new generated split gateway.";
+
+            // ✅redundant
+            case "GTW-06" -> "Remove gateway '" + node + "' and connect its incoming flow's source directly to its outgoing flow's target.";
+
+            // ✅missing condition
+            case "XOR-01" -> "Add a condition label to each unlabelled outgoing flow of XOR gateway '" + node +
+                    "' (syntax: '-->|condition|'); at most one flow may stay unlabelled as the default.";
+
+            // ✅Deadlock risk
+            case "AND-01" -> "There exist risk at the merge parallel gateway '" + node + "', " +
+                    "split nodes: [" + getCompactNode(error) + "] lead to the issue, " +
+                    "there exist possibility that merge gateway could not be activated " +
+                    "because of the endless waiting for incoming sequence flows that will never arrive.";
+
+            // ✅missing condition
+            case "OR-01" -> "Add a condition label to each unlabelled outgoing flow of OR gateway '" + node +
+                    "' (syntax: '-->|condition|'); at most one flow may stay unlabelled as the default.";
+
+            // ✅empty
+            case "SUB-01" -> "If this is a collapsed subprocess in form id:subprocess:(label), nothing to do here. " +
+                    "Otherwise, " + "add at least one element inside subprocess '" + node + "'.";
+
+            // ✅boundary
+            case "SUB-02" -> "Try to remove the sequence flow from (without label block) '" + edgeSource(error) + "' to '" + edgeTarget(error) +
+                    "' that crosses the subprocess boundary or restructure the nodes in subgraph.";
+
+            // ✅duplicate
+            case "LBL-01" -> "Rename the duplicated activities so that each activity label is unique if it is not in conflict with the process description.";
+
+            // ✅duplicate
+            case "EDGE-01" -> "Remove the duplicate sequence flow between node with key (without label block) '"
+                    + edgeSource(error) + "' and '" + edgeTarget(error) + "', keep only single flow.";
+
+            // ✅no reachable end
+            case "LOOP-01" -> "Add an exit to the loop entered at '" + node +
+                    "', for example give one gateway inside the loop a conditional flow that leads towards an end event.";
+
+            // ✅and as loop gateway
+            case "LOOP-02" -> "Let an exclusive gateway control the loop between (without label block) '" + edgeSource(error)
+                    + "' and '" + edgeTarget(error) + "' instead of a parallel gateway.";
+
+            default -> null;
+        };
+
+        suggestion.append(body);
+
+        return suggestion.toString();
     }
 
-    private static String nodeKey (BPMNError error, int index) {
+    private static String getCompactNode(BPMNError error) {
+
         List<Node> nodes = error.getNodes();
-        if (nodes == null || nodes.size() <= index || nodes.get(index) == null) {
+        if (nodes == null) {
             return "unknown node";
         }
-        return nodes.get(index).getKey();
+
+        StringBuilder builder = new StringBuilder();
+
+        for (int i = 1; i < nodes.size(); i++) {
+            if (i == 1) {
+                builder.append("'").append(nodes.get(i)).append("'");
+            } else {
+                builder.append(", '").append(nodes.get(i)).append("'");
+            }
+        }
+        return builder.toString();
     }
 
     private static String edgeSource(BPMNError error) {

@@ -54,14 +54,14 @@ public class MermaidParser {
             }
             currentInnerSubId = 0;
 
+            if (!this.hasStartLine(lines)) {
+                throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "There must exist a start line starts with " +
+                        "\"graph LR\" or \"graph TD\" or \"flowchart LR\"");
+            }
+
             for (String rawLine : lines) {
                 String line = rawLine.strip();
 
-                // TODO must contain first line e.g. graph LR
-
-                // no need to deal with graph TD/flowchart or something similar
-                // ignore empty lines and comment lines
-                // ignore direction
                 if (line.isEmpty() || line.equals("graph LR") || line.equals("graph TD") || line.equals("flowchart LR") || line.startsWith("%%") || line.equals("direction TD") || line.equals("direction LR")) {
                     continue;
 
@@ -91,22 +91,12 @@ public class MermaidParser {
                     }
 
                     // this is actually already checked at getSubgraphId()
-//                if (subId.isEmpty()) {
-//                    throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Subgraph line '" + line + "' does not have an id. This file was not structurally analyzed.");
-//                }
-
                     //public Node(String id, String fullName, NodeType type, String label, String rawShape, String location)
                     NodeType type = NodeType.SUBGRAPH;
-                    // String key = subId + ":subprocess";
                     RawShape rawShape = RawShape.SUBGRAPH;
-                    // String location;
 
                     this.updateNode(subs, key, subId, line, type, subLabel, rawShape);
 
-                    // this.nodes.get(key).setExpandedSubprocess(true);
-
-                    // TODO subs should work for subgraph--End block
-                    //  Due to the same-id problem, this cant work for naming location
                     subs.push(subId);
                     currentInnerSubId++;
 
@@ -191,19 +181,23 @@ public class MermaidParser {
         } catch (IOException e) {
             throw new IOException("There exists errors while reading the lines of the file of this path '" + mermaidPath + "', " + e.getMessage());
         }
+    }
 
+    private boolean hasStartLine(List<String> lines) {
+        for (String rawLine : lines) {
+            String line = rawLine.strip();
 
+            if (line.isEmpty() || line.startsWith("%%")) {
+                continue;
+            }
 
+            return line.equals("graph LR") || line.equals("graph TD") || line.equals("flowchart LR");
+        }
+        return false;
     }
 
     private String getSubgraphId(String line) throws InputValidationException {
         String info = line.substring(8).strip();
-
-        // TODO after test on mermaid.live, if a label contains "[], (), {}, single ", @, |"
-        //  It will fail to parse in mermaid.live.
-        //  But it is difficult to consider all possible situation
-        //  Current decision: since it seems like, there are no file has those problems, we can try to set them free
-        //  --> do not catch any character
 
         int labelBegin = info.indexOf("[");
         int labelEnd = info.lastIndexOf("]");
@@ -271,13 +265,12 @@ public class MermaidParser {
     }
 
 
-    // edge?
+
     private boolean isEdge(String a) {
         // same as isNode(), this method is not responsible for checking the validity of an edge
         return a.contains("-->");
     }
 
-    // TODO no start with does not mean it is 100% a valid subgraph
     // this is actually "should be parsed as a possible subgraph"
     // i am not trying to add anything complex here, whether there is something violated, decided by further checking
     private boolean isSubgraph(String a) {

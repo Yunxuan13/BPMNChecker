@@ -21,7 +21,6 @@ public class TokenLabelEngine {
 
     // store each merge point and its merging splits
     private LinkedHashMap<Node, List<Node>> CleanMergeMap;
-    // private LinkedHashMap<Node, LinkedHashMap<Node, Set<Integer>>> behavioralMergeMap;
     private LinkedHashMap<Node, LinkedHashMap<Integer, Set<Node>>> splitMap;
 
 
@@ -44,7 +43,7 @@ public class TokenLabelEngine {
 
     private void distributeLabels(List<Node> nodeList) {
 
-        Set<Node> starts = new HashSet<>();
+        Set<Node> starts = new LinkedHashSet<>();
 
         if (nodeList.isEmpty()) {
             return;
@@ -90,7 +89,6 @@ public class TokenLabelEngine {
 
                 List<TokenLabel> startVersion = new ArrayList<>();
                 List<Edge> history = new ArrayList<>();
-                // history.add(dummyEdge);
                 LinkedHashMap<Node, Integer> splits = new LinkedHashMap<>();
                 splits.put(dummy, initialBranchIndex);
 
@@ -246,7 +244,7 @@ public class TokenLabelEngine {
                 if (isOk) {
                     alive = true;
 
-                    Set<Edge> history = new HashSet<>();
+                    Set<Edge> history = new LinkedHashSet<>();
 
                     for (TokenLabel tokenLabel : tokenLabels) {
                         historySplits.remove(tokenLabel);
@@ -285,7 +283,6 @@ public class TokenLabelEngine {
                 }
             }
         }
-
         this.nodeTokens.put(next, historySplits.keySet().stream().toList());
     }
 
@@ -329,7 +326,6 @@ public class TokenLabelEngine {
             labels.add(label);
             this.edgeTokens.put(e, labels);
 
-            // TODO 如果不是dummy，就更新splitMap
             for (Node split : splits.keySet()) {
 
                 if (split.getType().equals(NodeType.DUMMY)) {
@@ -339,7 +335,7 @@ public class TokenLabelEngine {
                 int branch = splits.get(split);
 
                 LinkedHashMap<Integer, Set<Node>> branchArrival = new LinkedHashMap<>();
-                Set<Node> arrivalNode = new HashSet<>();
+                Set<Node> arrivalNode = new LinkedHashSet<>();
 
                 if (this.splitMap.containsKey(split)) {
                     branchArrival = this.splitMap.get(split);
@@ -353,9 +349,7 @@ public class TokenLabelEngine {
                 this.splitMap.put(split, branchArrival);
 
             }
-
         }
-
     }
 
     private boolean isReady(Map<Edge, Boolean> states) {
@@ -417,4 +411,5 @@ public class TokenLabelEngine {
     public void setSplitMap(LinkedHashMap<Node, LinkedHashMap<Integer, Set<Node>>> splitMap) {
         this.splitMap = splitMap;
     }
+
 }

@@ -301,7 +301,7 @@ public class BPMNChecker {
 
             int number = starts.size();
 
-            String message = "There exists" + number + " start events in scope " + scope + " (expected exactly one).";
+            String message = "There exist " + number + " start events in scope " + scope + " (expected exactly one).";
 
             if (number > 1) {
 
@@ -430,6 +430,7 @@ public class BPMNChecker {
             Set<Node> errorNodes = new LinkedHashSet<>();
             Set<Edge> errorEdges = new LinkedHashSet<>();
 
+
             for (Edge in : incomings) {
 
                 List<TokenLabel> labelList = this.tokenLabelEngine.getEdgeTokens().get(in);
@@ -438,7 +439,7 @@ public class BPMNChecker {
                     Node split = this.tokenLabelEngine.getLastNode(label.getSplits());
                     if (!split.getType().equals(gateway.getType()) && split.isGateway()) {
 
-                        errorEdges.add(in);
+                        errorEdges.addAll(this.getEdgesInBetween(label, split, gateway));
                         errorNodes.add(split);
                         num++;
                     }
@@ -449,10 +450,7 @@ public class BPMNChecker {
 
             if (num > 0) {
 
-                StringBuilder splits = new StringBuilder();
-                for (Node s : errorNodes) {
-                    splits.append(s);
-                }
+                String splits = this.nmixxNode(errorNodes.stream().toList());
 
                 String message = "Merge " + gateway.getType().name().toLowerCase() + " '" + gateway + "' joins " +
                         "split gateways: [" + splits + "], that have different type.";
@@ -484,31 +482,23 @@ public class BPMNChecker {
                 List<TokenLabel> inLabels = incomings.stream()
                         // a list of tokenLabels, with flat and final stream()
                         .flatMap(in -> tokenLabelEngine.getEdgeTokens().get(in).stream())
-                        .toList();
+                        .filter(label -> {
+                            Node split = tokenLabelEngine.getLastNode(label.getSplits());
+                            return split != null && split.getType() != NodeType.DUMMY;
+                        }).toList();
 
                 List<Node> splits = inLabels.stream()
                         // to another type with map (only one object)
                         .map(label -> tokenLabelEngine.getLastNode(label.getSplits()))
-                        .filter(split -> split != null && split.getType() != NodeType.DUMMY)
                         .distinct().toList();
 
                 List<Node> errorNodes = new ArrayList<>();
                 errorNodes.add(join);
                 errorNodes.addAll(splits);
 
-                // TODO 拼edge
-                List<Edge> errorEdges = new ArrayList<>();
+                Set<Edge> errorEdges = this.nmixxEdge(inLabels, join);
 
-                StringBuilder splitReport = new StringBuilder();
-
-                for (int i = 0; i < splits.size(); i++) {
-                    if (i != splits.size() - 1) {
-                        splitReport.append("'").append(splits.get(i)).append("', ");
-                    } else {
-                        splitReport.append("'").append(splits.get(i)).append("'");
-                    }
-
-                }
+                String splitReport = this.nmixxNode(splits);
 
                 // only one split
                 if (splits.size() == 1 && !tokenLabelEngine.getCleanMergeMap().containsKey(join)) {
@@ -540,7 +530,7 @@ public class BPMNChecker {
                                 "There exist violated nesting issues.";
 
                         BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation", GTW, scope, message
-                                , errorNodes, errorEdges, Severity.WARNING);
+                                , errorNodes, errorEdges.stream().toList(), Severity.WARNING);
 
                         errorList.add(error);
                     }
@@ -552,7 +542,7 @@ public class BPMNChecker {
                             " split gateways: [" + splitReport + "], there exist violated nesting issues.";
 
                     BPMNError error = new BPMNError("GTW-04", "Gateway Nesting Violation", GTW, scope, message
-                            , errorNodes, errorEdges, Severity.WARNING);
+                            , errorNodes, errorEdges.stream().toList(), Severity.WARNING);
 
                     errorList.add(error);
                 }
@@ -687,8 +677,8 @@ public class BPMNChecker {
 
                 List<Node> errorNodes = new ArrayList<>();
 
-                // TODO 拼edge
-                List<Edge> errorEdges = new ArrayList<>();
+                Set<Edge> errorEdges = this.nmixxEdge(arrivals, parallel);
+
                 StringBuilder builder = new StringBuilder();
 
                 boolean report = false;
@@ -698,7 +688,7 @@ public class BPMNChecker {
                     Node split = lastSplits.get(0);
 
                     boolean isTask = split.getType().equals(NodeType.TASK);
-                    Set<Integer> taskBranches = new HashSet<>();
+                    Set<Integer> taskBranches = new LinkedHashSet<>();
 
                     if (!split.getType().equals(NodeType.PARALLELGATEWAY)
                             && !split.getType().equals(NodeType.DUMMY)) {
@@ -717,12 +707,16 @@ public class BPMNChecker {
                         }
 
                     }
+
                 } else if (lastSplits.size() > 1) {
                     List<Node> issueSplits = this.findIssueSplit(arrivals);
 
                     if (!issueSplits.isEmpty()) {
                         errorNodes.add(parallel);
                         errorNodes.addAll(issueSplits);
+
+                        builder = new StringBuilder(this.nmixxNode(issueSplits));
+
                         report = true;
                     }
                 }
@@ -733,7 +727,7 @@ public class BPMNChecker {
                             "ancestor-non-parallel-split node: [" + builder + "].";
 
                     BPMNError error = new BPMNError("AND-01", "AND Join Deadlock Risk", AND, scope, message,
-                            errorNodes, errorEdges, Severity.ERROR);
+                            errorNodes, errorEdges.stream().toList(), Severity.ERROR);
 
                     errorList.add(error);
                 }
@@ -973,7 +967,7 @@ public class BPMNChecker {
 
                     List<Edge> edgesInScope = graph.getScopeEdges().get(scope);
 
-                    Set<String> result = new HashSet<>();
+                    Set<String> result = new LinkedHashSet<>();
 
                     for (Edge loop : backEdges) {
 
@@ -1056,6 +1050,54 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
+    private String nmixxNode(List<Node> splits) {
+        StringBuilder splitReport = new StringBuilder();
+
+        for (int i = 0; i < splits.size(); i++) {
+            if (i != splits.size() - 1) {
+                splitReport.append("'").append(splits.get(i)).append("', ");
+            } else {
+                splitReport.append("'").append(splits.get(i)).append("'");
+            }
+        }
+
+        return splitReport.toString();
+    }
+
+    private Set<Edge> nmixxEdge(List<TokenLabel> inLabels, Node join) {
+        Set<Edge> errorEdges = new LinkedHashSet<>();
+
+        for (TokenLabel label : inLabels) {
+            Node split = tokenLabelEngine.getLastNode(label.getSplits());
+            errorEdges.addAll(this.getEdgesInBetween(label, split, join));
+        }
+
+        return errorEdges;
+    }
+
+    private List<Edge> getEdgesInBetween(TokenLabel label, Node from, Node to) {
+        List<Edge> edges = new ArrayList<>();
+
+        boolean start = false;
+
+        for (Edge edge : label.getHistory()) {
+            if (edge.getSourceKey().equals(from.getKey())) {
+                start = true;
+            }
+            if (!start) {
+                continue;
+            }
+
+            edges.add(edge);
+
+            if (edge.getTargetKey().equals(to.getKey())) {
+                break;
+            }
+        }
+
+        return edges;
+    }
+
     private Set<Integer> branchWithConditions(Node split, Set<Integer> lasts) {
 
         LinkedHashMap<Integer, Boolean> conditionStates = graph.getConditionSplitTask().get(split);
@@ -1093,7 +1135,7 @@ public class BPMNChecker {
 
     private void addToPair(LinkedHashMap<Node, Set<Integer>> splits, TokenLabel label, Node node) {
         int branchIndex = label.getSplits().get(node);
-        Set<Integer> branches = new HashSet<>();
+        Set<Integer> branches = new LinkedHashSet<>();
         if (splits.containsKey(node)) {
             branches = splits.get(node);
         }

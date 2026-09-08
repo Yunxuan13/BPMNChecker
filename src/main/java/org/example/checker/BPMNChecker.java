@@ -45,14 +45,14 @@ public class BPMNChecker {
         this.conMissingOutgoingSequenceFlow();
         this.conUnreachableActivity();
         this.conEndEventUnreachableFromStart();
+
         // SE
         this.seMissingStart();
         this.seMissingEnd();
         this.seMultipleStart();
-        // this should be allowed according to bpmn2.0
-        // this.seMultipleEnd();
         this.seStartWithIncoming();
         this.seEndWithOutgoing();
+
         // GTW
         this.gtwImplicitSplit();
         this.gtwImplicitJoin();
@@ -65,7 +65,7 @@ public class BPMNChecker {
         this.xorMissingCondition();
 
         // AND
-        this.andMismatch();
+        this.andDeadlockRisk();
 
         // OR
         this.orMissingCondition();
@@ -660,8 +660,8 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-    // ❓AND-01, with token check
-    public void andMismatch() {
+    // ✅AND-01, with token check
+    public void andDeadlockRisk() {
 
         for (String scope : graph.getScopeNodes().keySet()) {
 
@@ -737,10 +737,8 @@ public class BPMNChecker {
 
                     errorList.add(error);
                 }
-
             }
         }
-
     }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1058,7 +1056,6 @@ public class BPMNChecker {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-    // private Set<Integer> branchWithConditions(Node split, List<TokenLabel> tokenLabels) {
     private Set<Integer> branchWithConditions(Node split, Set<Integer> lasts) {
 
         LinkedHashMap<Integer, Boolean> conditionStates = graph.getConditionSplitTask().get(split);
@@ -1103,7 +1100,6 @@ public class BPMNChecker {
         branches.add(branchIndex);
         splits.put(node, branches);
     }
-
 
     private boolean hasCondition(Node node, List<TokenLabel> tokenLabels, boolean onlyLast) {
         if (!onlyLast) {
@@ -1234,5 +1230,4 @@ public class BPMNChecker {
     public void setTokenLabelEngine(TokenLabelEngine tokenLabelEngine) {
         this.tokenLabelEngine = tokenLabelEngine;
     }
-
 }

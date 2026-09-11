@@ -52,6 +52,7 @@ public class TokenLabelEngine {
         LinkedHashMap<Node, Map<Edge, Boolean>> nodeArrivalTable = new LinkedHashMap<>();
 
         Deque<Node> processQueue = new ArrayDeque<>();
+        Node dummy = new Node("DUMMY","", NodeType.DUMMY, "", null, "");
 
         for (Node node : nodeList) {
             LinkedHashMap<Edge, Boolean> e = new LinkedHashMap<>();
@@ -60,6 +61,8 @@ public class TokenLabelEngine {
             if (in.isEmpty()) {
                 starts.add(node);
                 processQueue.push(node);
+                Edge dummyEdge = new Edge(dummy.getKey(), node.getKey());
+                dummy.getOutgoingEdges().add(dummyEdge);
 
             } else {
                 for (Edge edge : in) {
@@ -70,8 +73,9 @@ public class TokenLabelEngine {
             }
         }
 
+        this.loopFreeOut.put(dummy, dummy.getOutgoingEdges());
         int initialIndex = 0;
-        Node dummy = new Node("DUMMY","", NodeType.DUMMY, "", null, "");
+
 
         while (!processQueue.isEmpty()) {
 
@@ -80,12 +84,6 @@ public class TokenLabelEngine {
             if (starts.contains(currentNode)) {
 
                 int initialBranchIndex = initialIndex++;
-
-                Edge dummyEdge = new Edge(dummy.getKey(), currentNode.getKey());
-                List<Edge> dummyOut = dummy.getOutgoingEdges();
-                dummyOut.add(dummyEdge);
-                this.loopFreeOut.put(dummy, dummyOut);
-
 
                 List<TokenLabel> startVersion = new ArrayList<>();
                 List<Edge> history = new ArrayList<>();

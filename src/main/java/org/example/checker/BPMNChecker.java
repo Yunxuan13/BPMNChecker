@@ -43,7 +43,7 @@ public class BPMNChecker {
         this.conIsolatedNode();
         this.conMissingIncomingSequenceFlow();
         this.conMissingOutgoingSequenceFlow();
-        this.conUnreachableActivity();
+        this.conUnreachableNode();
         this.conEndEventUnreachableFromStart();
 
         // SE
@@ -151,7 +151,7 @@ public class BPMNChecker {
 
                 String scope = graph.getScope(node);
                 errorNodes.add(node);
-                String message = "Node '" + node.getKey() + "' which is not an end event has no outgoing sequence flow.";
+                String message = "Node '" + node + "' which is not an end event has no outgoing sequence flow.";
 
                 BPMNError error = new BPMNError("CON-03", "Missing Outgoing Sequence Flow", CON, scope,
                         message, errorNodes, errorEdges, Severity.ERROR);
@@ -163,7 +163,7 @@ public class BPMNChecker {
 
     // ✅CON-04, need scope check and reachability check
     // back edge tolerant
-    public void conUnreachableActivity() {
+    public void conUnreachableNode() {
 
         // ignore all edges that cross scopes
         for (List<Node> nodeList : graph.getScopeNodes().values()) {
@@ -1026,25 +1026,73 @@ public class BPMNChecker {
                 Node exitLoop = nodes.get(edge.getSourceKey());
                 Node enterLoop = nodes.get(edge.getTargetKey());
 
-                boolean parallel = exitLoop.getType() == NodeType.PARALLELGATEWAY
-                        || enterLoop.getType() == NodeType.PARALLELGATEWAY;
+                Node currentNode = exitLoop;
+                String message;
+                List<Node> errorNodes = new ArrayList<>();
+                List<Edge> errorEdges = new ArrayList<>();
+                List<Edge> tempo = new ArrayList<>();
 
-                if (parallel) {
+                while (currentNode.getOutgoingEdges().size() == 1 && currentNode.getIncomingEdges().size() == 1
+                        && !currentNode.isGateway() && currentNode != enterLoop) {
 
-                    List<Node> errorNodes = new ArrayList<>();
-                    errorNodes.add(exitLoop);
-                    errorNodes.add(enterLoop);
+                    tempo.add(currentNode.getIncomingEdges().get(0));
+                    currentNode = nodes.get(currentNode.getIncomingEdges().get(0).getSourceKey());
 
-                    List<Edge> errorEdges = new ArrayList<>();
-                    errorEdges.add(edge);
+                }
 
-                    String message = "Loop with back-edge '" + exitLoop + "' to '" +
-                            enterLoop + "' is controlled by a parallel (AND) gateway.";
+                if (currentNode.getType() == NodeType.PARALLELGATEWAY && currentNode.getOutgoingEdges().size() > 1) {
+                    // parallel = true;
+                    // exitLoop = currentNode;
+                    errorNodes.add(currentNode);
+                    errorEdges = tempo;
+
+                    message = " Gateway '" + currentNode + "' that directly influences loop entered at '" +
+                            enterLoop + "' is a parallel gateway (AND).";
+
+                    if (enterLoop.getType().equals(NodeType.PARALLELGATEWAY)) {
+                        errorNodes.add(enterLoop);
+                        message = message + "The enter gateway is a parallel gateway as well.";
+                    }
 
                     BPMNError error = new BPMNError("LOOP-02", "Loop Controlled by AND Gateway",
                             LOOP, scope, message, errorNodes, errorEdges, Severity.ERROR);
 
                     errorList.add(error);
+
+                } else if (enterLoop.getType() == NodeType.PARALLELGATEWAY && exitLoop.getType() == NodeType.PARALLELGATEWAY) {
+
+                    errorNodes.add(enterLoop);
+                    errorNodes.add(exitLoop);
+
+                    message = "Loop with '" + enterLoop + "' as enter gateway and with '" + exitLoop + "' of the loop is controlled here by a parallel (AND) gateway.";
+
+                    BPMNError error = new BPMNError("LOOP-02", "Loop Controlled by AND Gateway",
+                            LOOP, scope, message, errorNodes, errorEdges, Severity.ERROR);
+
+                    errorList.add(error);
+
+                } else if (exitLoop.getType() == NodeType.PARALLELGATEWAY) {
+
+                    errorNodes.add(exitLoop);
+
+                    message = "Loop with '" + exitLoop + "' as exit gateway of the loop is controlled here by a parallel (AND) gateway.";
+
+                    BPMNError error = new BPMNError("LOOP-02", "Loop Controlled by AND Gateway",
+                            LOOP, scope, message, errorNodes, errorEdges, Severity.ERROR);
+
+                    errorList.add(error);
+
+                } else if (enterLoop.getType() == NodeType.PARALLELGATEWAY) {
+
+                    errorNodes.add(enterLoop);
+
+                    message = "Loop with '" + enterLoop + "' as enter gateway of the loop is controlled here by a parallel (AND) gateway.";
+
+                    BPMNError error = new BPMNError("LOOP-02", "Loop Controlled by AND Gateway",
+                            LOOP, scope, message, errorNodes, errorEdges, Severity.ERROR);
+
+                    errorList.add(error);
+
                 }
             }
         }

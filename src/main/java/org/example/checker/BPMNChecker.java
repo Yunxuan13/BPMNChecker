@@ -10,7 +10,6 @@ import java.util.stream.Collectors;
 
 public class BPMNChecker {
 
-    // private MermaidParser parser;
     private final LinkedHashMap<String, Node> nodes;
     private final List<Edge> edges;
     private final List<BPMNError> errorList;
@@ -438,7 +437,7 @@ public class BPMNChecker {
                 List<TokenLabel> labelList = this.tokenLabelEngine.getEdgeTokens().get(in);
 
                 for (TokenLabel label : labelList) {
-                    Node split = this.tokenLabelEngine.getLastNode(label.getSplits());
+                    Node split = this.tokenLabelEngine.getLastNode(label.splits());
                     if (!split.getType().equals(gateway.getType()) && split.isGateway()) {
 
                         errorEdges.addAll(this.getEdgesInBetween(label, split, gateway));
@@ -485,13 +484,13 @@ public class BPMNChecker {
                         // a list of tokenLabels, with flat and final stream()
                         .flatMap(in -> tokenLabelEngine.getEdgeTokens().get(in).stream())
                         .filter(label -> {
-                            Node split = tokenLabelEngine.getLastNode(label.getSplits());
+                            Node split = tokenLabelEngine.getLastNode(label.splits());
                             return split != null && split.getType() != NodeType.DUMMY;
                         }).toList();
 
                 List<Node> splits = inLabels.stream()
                         // to another type with map (only one object)
-                        .map(label -> tokenLabelEngine.getLastNode(label.getSplits()))
+                        .map(label -> tokenLabelEngine.getLastNode(label.splits()))
                         .distinct().toList();
 
                 List<Node> errorNodes = new ArrayList<>();
@@ -511,8 +510,8 @@ public class BPMNChecker {
                     // branches that meet at this merge point
                     List<Integer> meet = inLabels.stream()
                             .map(label -> {
-                                Node lastSplit = tokenLabelEngine.getLastNode(label.getSplits());
-                                return label.getSplits().get(lastSplit);
+                                Node lastSplit = tokenLabelEngine.getLastNode(label.splits());
+                                return label.splits().get(lastSplit);
                             })
                             .distinct()
                             .toList();
@@ -1118,7 +1117,7 @@ public class BPMNChecker {
         Set<Edge> errorEdges = new LinkedHashSet<>();
 
         for (TokenLabel label : inLabels) {
-            Node split = tokenLabelEngine.getLastNode(label.getSplits());
+            Node split = tokenLabelEngine.getLastNode(label.splits());
             errorEdges.addAll(this.getEdgesInBetween(label, split, join));
         }
 
@@ -1130,7 +1129,7 @@ public class BPMNChecker {
 
         boolean start = false;
 
-        for (Edge edge : label.getHistory()) {
+        for (Edge edge : label.history()) {
             if (edge.getSourceKey().equals(from.getKey())) {
                 start = true;
             }
@@ -1162,7 +1161,7 @@ public class BPMNChecker {
         LinkedHashMap<Node, Set<Integer>> lasts = new LinkedHashMap<>();
 
         for (TokenLabel label : tokenLabels) {
-            Node last = tokenLabelEngine.getLastNode(label.getSplits());
+            Node last = tokenLabelEngine.getLastNode(label.splits());
             addToPair(lasts, label, last);
         }
 
@@ -1174,7 +1173,7 @@ public class BPMNChecker {
 
         for (TokenLabel label : tokenLabels) {
 
-            for (Node node : label.getSplits().keySet()) {
+            for (Node node : label.splits().keySet()) {
                 addToPair(splits, label, node);
             }
 
@@ -1184,7 +1183,7 @@ public class BPMNChecker {
     }
 
     private void addToPair(LinkedHashMap<Node, Set<Integer>> splits, TokenLabel label, Node node) {
-        int branchIndex = label.getSplits().get(node);
+        int branchIndex = label.splits().get(node);
         Set<Integer> branches = new LinkedHashSet<>();
         if (splits.containsKey(node)) {
             branches = splits.get(node);
@@ -1229,17 +1228,17 @@ public class BPMNChecker {
         Node ancestor = null;
 
         TokenLabel shortest = tokenLabels.stream()
-                .min(Comparator.comparingInt(tokenLabel -> tokenLabel.getSplits().size()))
+                .min(Comparator.comparingInt(tokenLabel -> tokenLabel.splits().size()))
                 .orElse(tokenLabels.get(0));
 
 
-        for (Node split : shortest.getSplits().keySet()) {
+        for (Node split : shortest.splits().keySet()) {
             boolean exist = true;
             for (TokenLabel other : tokenLabels) {
                 if (other.equals(shortest)) {
                     continue;
                 }
-                if (!other.getSplits().containsKey(split)) {
+                if (!other.splits().containsKey(split)) {
                     exist = false;
                     break;
                 }
@@ -1254,7 +1253,7 @@ public class BPMNChecker {
         for (TokenLabel label : tokenLabels) {
 
             boolean start = false;
-            for (Node node : label.getSplits().keySet()) {
+            for (Node node : label.splits().keySet()) {
                 if (!start) {
                     if (node == ancestor) {
                         start = true;

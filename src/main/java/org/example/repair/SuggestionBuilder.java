@@ -12,21 +12,15 @@ public final class SuggestionBuilder {
     public static String suggest (BPMNError error) {
 
         // main error node
-        // String key = nodeKey(error, 0);
         String node = "";
-        if (error.getNodes() != null && !error.getNodes().isEmpty()) {
-            node = error.getNodes().get(0).toString();
+        if (error.nodes() != null && !error.nodes().isEmpty()) {
+            node = error.nodes().get(0).toString();
         }
 
-//        String startWords = "Please take a look at the \"Error-Message\", find out the issues and you try to repair them. " +
-//                "Followings are some suggestions to each kind of issue, " +
-//                "you should first read the process description carefully, " +
-//                "then try to repair them with help of suggestions if it fits the requirements. ";
 
         StringBuilder suggestion = new StringBuilder();
-        // suggestion.append(startWords).append("\nSuggestion: ");
 
-        String body = switch (error.getErrorId()) {
+        String body = switch (error.errorId()) {
 
             // ✅Isolated Node
             case "CON-01" -> "Connect '" + node + "' to the process, " +
@@ -143,7 +137,7 @@ public final class SuggestionBuilder {
 
     private static String getCompactNode(BPMNError error, boolean withMain) {
 
-        List<Node> nodes = error.getNodes();
+        List<Node> nodes = error.nodes();
         if (nodes == null) {
             return "unknown node";
         }
@@ -162,7 +156,7 @@ public final class SuggestionBuilder {
     }
 
     private static String edgeSource(BPMNError error) {
-        List<Edge> edgeList = error.getEdges();
+        List<Edge> edgeList = error.edges();
         if (edgeList == null || edgeList.isEmpty() || edgeList.get(0) == null) {
             return "unknown edge";
         }
@@ -170,7 +164,7 @@ public final class SuggestionBuilder {
     }
 
     private static String edgeTarget(BPMNError error) {
-        List<Edge> edgeList = error.getEdges();
+        List<Edge> edgeList = error.edges();
         if (edgeList == null || edgeList.isEmpty() || edgeList.get(0) == null) {
             return "unknown edge";
         }

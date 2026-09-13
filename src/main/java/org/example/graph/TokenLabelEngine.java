@@ -26,13 +26,14 @@ public class TokenLabelEngine {
 
     public TokenLabelEngine(ProcessGraph graph) {
         this.graph = graph;
+
         this.loopFreeIn = new LinkedHashMap<>(graph.getLoopFreeIn());
         this.loopFreeOut = new LinkedHashMap<>(graph.getLoopFreeOut());
 
         this.edgeTokens = new LinkedHashMap<>();
         this.nodeTokens = new LinkedHashMap<>();
+
         this.CleanMergeMap = new LinkedHashMap<>();
-        // this.behavioralMergeMap = new LinkedHashMap<>();
         this.splitMap = new LinkedHashMap<>();
 
         for (String scope : graph.getScopeNodes().keySet()) {
@@ -145,59 +146,45 @@ public class TokenLabelEngine {
 
     private void merge(Node next, List<Edge> incomings) {
 
-        // 该节点前面每一个incoming edge上带的split信息（可平行？）
         LinkedHashMap<TokenLabel, LinkedHashMap<Node, Integer>> historySplits = new LinkedHashMap<>();
 
         for (Edge edge : incomings) {
 
             List<TokenLabel> labels = this.edgeTokens.get(edge);
             for (TokenLabel label : labels) {
-                historySplits.put(label, label.getSplits());
+                historySplits.put(label, label.splits());
             }
 
         }
 
-        // 比较上一个split，计算index是否都回来了
-        // 只要触发一次合并，alive就应该保持true
         boolean alive = true;
 
         while (alive) {
             alive = false;
-            // last split node for each edge
 
-            // 完全相同的前n-1组，完全相同的最后一组的
-
-            // <Node, Integer> n-1, same part, the last one will be calculated by tokenLabel afterward.
             LinkedHashMap<LinkedHashMap<Node, Integer>, List<TokenLabel>> groups = new LinkedHashMap<>();
 
-            // 为groups做准备
             for (TokenLabel tokenLabel : historySplits.keySet()) {
 
-                LinkedHashMap<Node, Integer> splitNodes = new LinkedHashMap<>(tokenLabel.getSplits());
+                LinkedHashMap<Node, Integer> splitNodes = new LinkedHashMap<>(tokenLabel.splits());
                 if (splitNodes.isEmpty()) {
                     continue;
                 }
 
                 // n-1
-                // lastNode算法保留，最后一个splitNode需要保证node相同，integer不同
                 Node lastNode = this.getLastNode(splitNodes);
                 int branchIndex = splitNodes.get(lastNode);
 
                 splitNodes.remove(lastNode);
 
-                // groups里逐一去判断是否应该去merge
-                // 不急着直接put进去，最终再put
-
                 if (groups.containsKey(splitNodes)) {
 
-                    // 所有已经在的待合并列表
                     List<TokenLabel> tokenLabels = new ArrayList<>(groups.get(splitNodes));
 
-                    // 每一个已经在列表里的tokenLabel对应的最后一个（其实不在splitNodes中）split都应该一样。
                     boolean acceptable = true;
                     for (TokenLabel label : tokenLabels) {
-                        Node temp = this.getLastNode(label.getSplits());
-                        int branchTemp = label.getSplits().get(temp);
+                        Node temp = this.getLastNode(label.splits());
+                        int branchTemp = label.splits().get(temp);
 
                         if (!temp.equals(lastNode) || branchIndex == branchTemp) {
                             acceptable = false;
@@ -222,7 +209,7 @@ public class TokenLabelEngine {
 
                 List<Integer> index = this.getIndex(tokenLabels);
 
-                Node split = this.getLastNode(tokenLabels.get(0).getSplits());
+                Node split = this.getLastNode(tokenLabels.get(0).splits());
 
                 int totalBranchNumber = this.loopFreeOut.get(split).size();
 
@@ -246,18 +233,17 @@ public class TokenLabelEngine {
 
                     for (TokenLabel tokenLabel : tokenLabels) {
                         historySplits.remove(tokenLabel);
-                        history.addAll(tokenLabel.getHistory());
+                        history.addAll(tokenLabel.history());
                     }
 
                     TokenLabel example = tokenLabels.get(0);
 
 
-                    LinkedHashMap<Node, Integer> beforeMerge = new LinkedHashMap<>(example.getSplits());
+                    LinkedHashMap<Node, Integer> beforeMerge = new LinkedHashMap<>(example.splits());
                     Node last = this.getLastNode(beforeMerge);
                     beforeMerge.remove(last);
                     Node realLast = this.getLastNode(beforeMerge);
 
-                    // 如果到最后一层了则为-1
                     int branchIndex = -1;
                     if (!(realLast == null)) {
                         branchIndex = beforeMerge.get(realLast);
@@ -269,8 +255,6 @@ public class TokenLabelEngine {
 
                     if (split.getType() != NodeType.DUMMY) {
 
-                        // 当前node：next是merge point
-                        // 查看那些split在这里merge了
                         List<Node> mergedSplits = new ArrayList<>();
                         if (this.CleanMergeMap.containsKey(next)) {
                             mergedSplits = this.CleanMergeMap.get(next);
@@ -287,7 +271,7 @@ public class TokenLabelEngine {
     private List<Integer> getIndex(List<TokenLabel> tokenLabels) {
         List<Integer> index = new ArrayList<>();
         for (TokenLabel tokenLabel : tokenLabels) {
-            index.add(tokenLabel.getSplits().get(this.getLastNode(tokenLabel.getSplits())));
+            index.add(tokenLabel.splits().get(this.getLastNode(tokenLabel.splits())));
         }
         return index;
     }
@@ -300,19 +284,17 @@ public class TokenLabelEngine {
         return lastNode;
     }
 
-    // 新用法：这里用于更新edge并返回所有的TokenLabel
     private void updateState(Edge e, Node currentNode, int i, List<TokenLabel> tokenLabels, Node next) {
 
         for (TokenLabel tokenLabel : tokenLabels) {
 
-            LinkedHashMap<Node, Integer> splits = new LinkedHashMap<>(tokenLabel.getSplits());
+            LinkedHashMap<Node, Integer> splits = new LinkedHashMap<>(tokenLabel.splits());
 
             if (i > -1) {
                 splits.put(currentNode, i);
             }
 
-            // 处理 currentNode 后的一条线和一个 Node
-            List<Edge> history = new ArrayList<>(tokenLabel.getHistory());
+            List<Edge> history = new ArrayList<>(tokenLabel.history());
             history.add(e);
 
             TokenLabel label = new TokenLabel(i, history, splits);

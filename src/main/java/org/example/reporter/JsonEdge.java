@@ -6,8 +6,6 @@ public class JsonEdge {
     private String target;
     private String condition;
 
-
-
     public String getSource() {
         return source;
     }

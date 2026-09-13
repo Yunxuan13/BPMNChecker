@@ -25,20 +25,20 @@ public class JsonReporter {
         int warningCount = 0;
 
         for (BPMNError error : errorList) {
-            if (error.getSeverity() == Severity.ERROR) {
+            if (error.severity() == Severity.ERROR) {
                 errorCount++;
             } else {
                 warningCount++;
             }
 
             JsonIssue issue = new JsonIssue();
-            issue.setErrorId(error.getErrorId());
-            issue.setErrorName(error.getErrorName());
-            issue.setCategory(error.getErrorCategory());
-            issue.setSeverity(error.getSeverity().name().toLowerCase());
-            issue.setScope(convertScope(error.getScope()));
+            issue.setErrorId(error.errorId());
+            issue.setErrorName(error.errorName());
+            issue.setCategory(error.errorCategory());
+            issue.setSeverity(error.severity().name().toLowerCase());
+            issue.setScope(convertScope(error.scope()));
 
-            issue.setMessage(error.getMessage());
+            issue.setMessage(error.message());
 
             issue.setSuggestion(SuggestionBuilder.suggest(error));
 
@@ -61,7 +61,7 @@ public class JsonReporter {
 
     private static List<JsonEdge> getJsonEdges(BPMNError error) {
         List<JsonEdge> errorEdges = new ArrayList<>();
-        for (Edge edge : error.getEdges()) {
+        for (Edge edge : error.edges()) {
             JsonEdge e = new JsonEdge();
             e.setSource(edge.getSourceKey());
             e.setTarget(edge.getTargetKey());
@@ -73,17 +73,12 @@ public class JsonReporter {
 
     private static List<JsonNode> getJsonNodes(BPMNError error) {
         List<JsonNode> errorNodes = new ArrayList<>();
-        for (Node node : error.getNodes()) {
+        for (Node node : error.nodes()) {
             JsonNode n = new JsonNode();
             n.setKey(node.toString());
             n.setLabel(node.getLabel());
             n.setType(node.getType().name().toLowerCase());
             n.setSubprocess(node.getLocation());
-            List<String> roles = new ArrayList<>();
-            for (Role role : node.getRoles()) {
-                roles.add(role.name().toLowerCase());
-            }
-            n.setRoles(roles);
             errorNodes.add(n);
         }
         return errorNodes;

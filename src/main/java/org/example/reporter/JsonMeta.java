@@ -10,7 +10,6 @@ public class JsonMeta {
 
     private int errorCount;
     private int warningCount;
-    // private int infoCount;
 
     private int totalIssues;
 

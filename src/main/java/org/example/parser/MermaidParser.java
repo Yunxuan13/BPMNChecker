@@ -13,8 +13,8 @@ import java.util.*;
 
 public class MermaidParser {
 
-    private LinkedHashMap<String, Node> nodes;
-    private List<Edge> edges;
+    private final LinkedHashMap<String, Node> nodes;
+    private final List<Edge> edges;
 
     private static final String SYNTAX_REMINDER = "The file was not structurally analyzed.";
 
@@ -34,14 +34,9 @@ public class MermaidParser {
         try {
             List<String> lines = Files.readAllLines(Path.of(mermaidPath));
 
-            // 应该先检查身处何处，再加入新的subprocess
-
             // can contain same value
             Deque<String> subs = new ArrayDeque<>();
 
-            // for situation like /Users/xuan/Documents/thesis/llm-generated-mermaid-models/gpt-4o/mad150/project_management_process_3.txt
-            // register all subgraph "id", if not in this situation:
-            // like 1 --> 2 parse error/throw exception
             Set<String> subgraphIds = new HashSet<>();
 
             for (String rawLine : lines) {
@@ -56,7 +51,7 @@ public class MermaidParser {
 
             if (!this.hasStartLine(lines)) {
                 throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "There must exist a start line starts with " +
-                        "\"graph LR\" or \"graph TD\" or \"flowchart LR\"");
+                        "'graph LR' or 'graph TD' or 'flowchart LR'. " + SYNTAX_REMINDER);
             }
 
             for (String rawLine : lines) {
@@ -67,18 +62,12 @@ public class MermaidParser {
 
                 } else if (this.isSubgraph(line)) {
 
-                    // e.g. subgraph subId [subgraph-label]
-                    // (with space instead of ":")
-                    // ！！not only this type
-                    // but subgraph apple / subgraph apple banana / subgraph apple [banana orange] / subgraph apple[banana]
 
-                    // subgraph should also be considered as a node for using
-                    // will throw exception if invalid
+                    // possible to be parsed subgraph apple / subgraph apple banana / subgraph apple [banana orange] / subgraph apple[banana]
                     String subId = this.getSubgraphId(line);
 
                     // in mermaid, if a sentence begins with a "subgraph", the shape must be [], otherwise there will be syntax-error
                     // if subId already be register, then the new label will not be updated to the node
-                    // DONE 处理如果inline subprocess和expaned subprocess撞id的问题 maybe other name in second part like key = "<id>:subgraph"
                     String key = subId + ":subgraph";
                     String subLabel;
 
@@ -90,8 +79,6 @@ public class MermaidParser {
                         subLabel = this.getSubgraphLabel(line);
                     }
 
-                    // this is actually already checked at getSubgraphId()
-                    //public Node(String id, String fullName, NodeType type, String label, String rawShape, String location)
                     NodeType type = NodeType.SUBGRAPH;
                     RawShape rawShape = RawShape.SUBGRAPH;
 
@@ -105,26 +92,21 @@ public class MermaidParser {
                     if (subs.isEmpty()) {
                         throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Unmatched 'end': no open subgraph block to close. " + SYNTAX_REMINDER);
                     }
-                    // end and only end
-                    // pop current subprocess
+
                     subs.pop();
 
 
                 } else if (this.isEdge(line)) {
 
-                    // e.g. form like id1:type1:shape --> id:type:shape
-                    // & id:type:shape -->|condition-label| id:type:shape
-                    // cut at -->
-                    String[] seperated = line.split("-->");
+                    String[] seperated = line.split("-->", -1);
 
-                    // node1 --> node2 --> node3 ..... out of scope of our checker
-                    if (seperated.length != 2) {
-                        throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Line '" + line + "' may have multiple endpoints." + SYNTAX_REMINDER);
+                    if (seperated.length != 2 || seperated[0].isBlank() || seperated[1].isBlank()) {
+                        throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "An edge declaration must contain exactly one '-->' and two endpoints. "
+                                + SYNTAX_REMINDER);
                     }
 
 
                     String source = seperated[0].strip();
-                    // which can contains condition part
                     String right = seperated[1].strip();
 
                     String condition = null;
@@ -138,44 +120,41 @@ public class MermaidParser {
                         if (pos == -1) {
                             throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "In the line '" + line + "' has invalid condition block. " +SYNTAX_REMINDER);
                         }
-                        condition = right.substring(1, pos);
+                        condition = right.substring(1, pos).strip();
+                        if (condition.isBlank()) {
+                            condition = null;
+                        }
 
                         target = right.substring(pos + 1).strip();
                     } else {
                         target = right;
                     }
 
-                    // generate Nodes
-                    // version 1: we simply consider, that there will only be either nodes or subprocess-id
-                    // other situation (e.g. include space or some illegal situation) can temporarily be ignored
-                    // situation of subprocess-name will not be considered here
-
+                    // generate nodes
                     sourceKey = this.resolveEndpoint(source, subs, subgraphIds, line);
                     targetKey = this.resolveEndpoint(target, subs, subgraphIds, line);
 
                     // generate edge
-                    // public Edge(String sourceKey, String condition, String targetKey)
                     Edge edge = new Edge(sourceKey, condition, targetKey);
-                    // we do not eliminate duplication here --> BPMNChecker
                     this.edges.add(edge);
 
                 } else if (this.isNode(line)) {
 
-                    // Node
-                    // id:type:shape
                     this.parseNode(line, subs);
 
                 } else if (this.isNonNumericId(line)) {
-                    //
                     throw new InputValidationException(Reason.NON_NUMERIC_BPMN_NODE_ID, "The ID of a node in non-numeric ("+ line + ") is out of scope. " + SYNTAX_REMINDER);
                 } else {
-                    // throw exceptions for invalid lines
                     throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "Unrecognized line '" + line + "' is neither a node declaration, an edge nor a subgraph construct. " + SYNTAX_REMINDER);
                 }
             }
 
             if (!subs.isEmpty()) {
                 throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "At least one subgraph block is not closed. " + SYNTAX_REMINDER);
+            }
+
+            if (this.nodes.isEmpty()) {
+                throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "This file does not contain any node. " + SYNTAX_REMINDER);
             }
 
         } catch (IOException e) {
@@ -252,7 +231,6 @@ public class MermaidParser {
         throw new InputValidationException(Reason.BARE_ID_PROBLEM, "Bare-ID node in Edge ("+ line + ") is out of scope. " + SYNTAX_REMINDER);
     }
 
-    // single node?
     private boolean isNode(String a) {
         // checking the validity of a node is currently not a work of this method.
         // if true, this method will activate parseNode() anyway --> check there
@@ -264,15 +242,10 @@ public class MermaidParser {
         return a.matches("\\w+:\\w+:.*") && !this.isEdge(a);
     }
 
-
-
     private boolean isEdge(String a) {
-        // same as isNode(), this method is not responsible for checking the validity of an edge
         return a.contains("-->");
     }
 
-    // this is actually "should be parsed as a possible subgraph"
-    // i am not trying to add anything complex here, whether there is something violated, decided by further checking
     private boolean isSubgraph(String a) {
         return a.startsWith("subgraph");
     }
@@ -284,7 +257,6 @@ public class MermaidParser {
     // except Subgraph
     private Node parseNode(String nodeLine, Deque<String> subs) throws InputValidationException {
 
-        // id:type:shape
         String[] seperated = nodeLine.split(":", 3);
         String id = seperated[0];
         String typ = seperated[1];
@@ -293,7 +265,7 @@ public class MermaidParser {
         RawShape rawShape;
         String label;
 
-        // if type and shape dont match --> throw exception
+        // if type and shape don't match --> throw exception
         if (shape.matches("\\(\\(\\([^(){}]*\\)\\)\\)")) {
 
             rawShape = RawShape.ENDEVENT;
@@ -347,7 +319,6 @@ public class MermaidParser {
             case "inclusivegateway" -> NodeType.INCLUSIVEGATEWAY;
             case "parallelgateway" -> NodeType.PARALLELGATEWAY;
             case "subprocess" -> NodeType.SUBPROCESS;
-            // case "subgraph" -> NodeType.SUBGRAPH will not appear here
             default -> throw new InputValidationException(Reason.UNRECOGNIZED_SYNTAX, "This type appear unexpected. " + SYNTAX_REMINDER);
         };
     }
@@ -362,11 +333,12 @@ public class MermaidParser {
             node.setLabel(label);
 
             String currentLocation = node.getLocation();
-            // TODO: consider the situation, a node already be recorded in a mainprocess, but here in "null"
+
             if (!subs.isEmpty() && (currentLocation == null || subs.contains(currentLocation))) {
                 // subs has sub-graphs, before no location for this node or current(before) location is parent-subgraph of the location now
                 node.setLocation(subs.peek());
             }
+
         } else {
             location = subs.isEmpty() ? null : subs.peek();
             node = new Node(id, fullname, type, label, rawShape, location);
@@ -379,15 +351,7 @@ public class MermaidParser {
         return nodes;
     }
 
-    public void setNodes(LinkedHashMap<String, Node> nodes) {
-        this.nodes = nodes;
-    }
-
     public List<Edge> getEdges() {
         return edges;
-    }
-
-    public void setEdges(List<Edge> edges) {
-        this.edges = edges;
     }
 }

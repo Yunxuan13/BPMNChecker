@@ -3,7 +3,6 @@ package org.example.graph;
 import org.example.model.Edge;
 import org.example.model.Node;
 import org.example.model.NodeType;
-import org.example.model.Role;
 
 import java.util.*;
 
@@ -110,7 +109,6 @@ public class ProcessGraph {
 
             List<Edge> out = new ArrayList<>();
             List<Edge> in = new ArrayList<>();
-            List<Role> roles = new ArrayList<>();
 
             for (Edge edge : edges) {
                 if (Objects.equals(edge.getSourceKey(), node.getKey())) {
@@ -124,15 +122,6 @@ public class ProcessGraph {
             node.setOutgoingEdges(out);
             node.setIncomingEdges(in);
 
-            // TODO 判断这个到底需不需要，如果需要是否应该挪到后面去？
-            if (node.getIncomingEdges().size() > 1) {
-                roles.add(Role.MERGE);
-            }
-
-            if (node.getOutgoingEdges().size() > 1) {
-                roles.add(Role.SPLIT);
-            }
-            node.setRoles(roles);
         }
     }
 
@@ -167,8 +156,8 @@ public class ProcessGraph {
         for (Node node : nodes.values()) {
             String scope = this.getScope(node);
 
-            List<Edge> in = new ArrayList<>(node.getIncomingEdges());
-            List<Edge> out = new ArrayList<>(node.getOutgoingEdges());
+            List<Edge> in = new ArrayList<>(new LinkedHashSet<>(node.getIncomingEdges()));
+            List<Edge> out = new ArrayList<>(new LinkedHashSet<>(node.getOutgoingEdges()));
 
             in.removeIf(i -> this.scopeBackEdges.get(scope).contains(i) || !this.scopeEdges.get(scope).contains(i));
             out.removeIf(o -> this.scopeBackEdges.get(scope).contains(o)|| !this.scopeEdges.get(scope).contains(o) );

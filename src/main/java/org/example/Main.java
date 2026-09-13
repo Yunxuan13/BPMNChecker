@@ -35,7 +35,8 @@ public class Main {
         } else if (args.length == 2) {
             runBatch(args[0], args[1]);
         } else {
-            System.out.println("We need to receive a path to Mermaid-File.");
+            System.err.println("We need to receive a path to Mermaid-File.");
+            System.exit(1);
         }
 
     }
@@ -70,7 +71,8 @@ public class Main {
         File outputFolder = new File(output);
 
         if (!inputFolder.isDirectory()) {
-            System.out.println("Can't find directory:" + input);
+            System.err.println("Can't find directory:" + input);
+            System.exit(1);
             return;
         }
 
@@ -91,7 +93,7 @@ public class Main {
             for (String dataset : DATASETS) {
                 File[] files = new File(inputFolder, dataset).listFiles();
                 if (files == null) {
-                    System.out.println("Dataset '" + dataset + "' not found!");
+                    System.err.println("Dataset '" + dataset + "' not found!");
                     continue;
                 }
 
@@ -124,7 +126,8 @@ public class Main {
 
 
         } catch (Exception e) {
-            System.out.println("Fail tot write output, " + e.getMessage());
+            System.err.println("Fail to write output, " + e.getMessage());
+            System.exit(1);
             return;
         }
 

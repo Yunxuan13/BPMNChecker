@@ -5,23 +5,16 @@ import java.util.List;
 
 public class Node {
 
-    // as a subprocess-node, index could be characters
-    // here id = "id:type"
     private final String id;
     private final String fullName;
     private final NodeType type;
     private String label;
     private final RawShape rawShape;
     private boolean isGateway = false;
-    // private boolean expandedSubprocess = false;
-    // main process or any subprocess
     private String location;
+
     private List<Edge> incomingEdges;
     private List<Edge> outgoingEdges;
-
-    // can only be added later, will not be in the constructor
-    // nodes should only be created by parsexxxx
-    private List<Role> roles;
 
 
     public Node(String id, String fullName, NodeType type, String label, RawShape rawShape, String location) {
@@ -33,8 +26,6 @@ public class Node {
         if (type == NodeType.EXCLUSIVEGATEWAY || type == NodeType.INCLUSIVEGATEWAY || type == NodeType.PARALLELGATEWAY) {
             this.isGateway = true;
         }
-        // should ensure there must be at least one role(?)
-        this.roles = new ArrayList<>();
         this.location = location;
         this.outgoingEdges = new ArrayList<>();
         this.incomingEdges = new ArrayList<>();
@@ -42,7 +33,6 @@ public class Node {
 
     public String getKey() {
         return this.id + ":" + this.type.name().toLowerCase();
-        // subprocess then: sub_id:subprocess
     }
 
     public String toString() {
@@ -95,14 +85,6 @@ public class Node {
 
     public boolean isGateway() {
         return isGateway;
-    }
-
-    public List<Role> getRoles() {
-        return roles;
-    }
-
-    public void setRoles(List<Role> roles) {
-        this.roles = roles;
     }
 
     public void setGateway(boolean gateway) {

@@ -1,14 +1,11 @@
 package org.example.reporter;
 
-import java.util.ArrayList;
-import java.util.List;
 
 public class JsonNode {
     private String key;
     private String label;
     private String type;
     private String subprocess;
-    private List<String> roles = new ArrayList<>();
 
     public String getKey() {
         return key;
@@ -40,13 +37,5 @@ public class JsonNode {
 
     public void setSubprocess(String subprocess) {
         this.subprocess = subprocess;
-    }
-
-    public List<String> getRoles() {
-        return roles;
-    }
-
-    public void setRoles(List<String> roles) {
-        this.roles = roles;
     }
 }

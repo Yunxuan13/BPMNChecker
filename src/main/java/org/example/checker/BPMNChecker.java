@@ -13,9 +13,9 @@ public class BPMNChecker {
     // private MermaidParser parser;
     private final LinkedHashMap<String, Node> nodes;
     private final List<Edge> edges;
-    private List<BPMNError> errorList;
-    private ProcessGraph graph;
-    private TokenLabelEngine tokenLabelEngine;
+    private final List<BPMNError> errorList;
+    private final ProcessGraph graph;
+    private final TokenLabelEngine tokenLabelEngine;
 
     private static final String CON = "Connectivity and Reachability";
     private static final String SE = "Start and End Event";
@@ -183,7 +183,7 @@ public class BPMNChecker {
                 String scope = graph.getScope(errorNode);
                 String message = "Node '" + errorNode + "' is not reachable from any start event in its scope.";
 
-                BPMNError error = new BPMNError("CON-04", "Unreachable Activity", CON, scope, message,
+                BPMNError error = new BPMNError("CON-04", "Unreachable Node", CON, scope, message,
                         errorNodes, errorEdges, Severity.ERROR);
 
                 errorList.add(error);
@@ -834,7 +834,7 @@ public class BPMNChecker {
                 List<Edge> errorEdges = new ArrayList<>();
                 errorEdges.add(edge);
 
-                String message = "Sequence flow from '" + source.getKey() + "' to '" + target.getKey() + "' crosses a subprocess boundary.";
+                String message = "Sequence flow from '" + source + "' to '" + target + "' crosses a subprocess boundary.";
 
                 BPMNError error = new BPMNError("SUB-02", "Subprocess Boundary Violation", SUB, scope,
                         message, errorNodes, errorEdges, Severity.ERROR);
@@ -1303,23 +1303,11 @@ public class BPMNChecker {
         return errorList;
     }
 
-    public void setErrorList(List<BPMNError> errorList) {
-        this.errorList = errorList;
-    }
-
     public ProcessGraph getGraph() {
         return graph;
     }
 
-    public void setGraph(ProcessGraph graph) {
-        this.graph = graph;
-    }
-
     public TokenLabelEngine getTokenLabelEngine() {
         return tokenLabelEngine;
-    }
-
-    public void setTokenLabelEngine(TokenLabelEngine tokenLabelEngine) {
-        this.tokenLabelEngine = tokenLabelEngine;
     }
 }

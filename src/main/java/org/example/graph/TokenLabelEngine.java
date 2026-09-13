@@ -9,19 +9,19 @@ import java.util.*;
 
 public class TokenLabelEngine {
 
-    private ProcessGraph graph;
+    private final ProcessGraph graph;
 
     // these two will be edited by the existence of dummy
-    private LinkedHashMap<Node, List<Edge>> loopFreeIn;
-    private LinkedHashMap<Node, List<Edge>> loopFreeOut;
+    private final LinkedHashMap<Node, List<Edge>> loopFreeIn;
+    private final LinkedHashMap<Node, List<Edge>> loopFreeOut;
 
     // token states
-    private LinkedHashMap<Edge, List<TokenLabel>> edgeTokens;
-    private LinkedHashMap<Node, List<TokenLabel>> nodeTokens;
+    private final LinkedHashMap<Edge, List<TokenLabel>> edgeTokens;
+    private final LinkedHashMap<Node, List<TokenLabel>> nodeTokens;
 
     // store each merge point and its merging splits
-    private LinkedHashMap<Node, List<Node>> CleanMergeMap;
-    private LinkedHashMap<Node, LinkedHashMap<Integer, Set<Node>>> splitMap;
+    private final LinkedHashMap<Node, List<Node>> CleanMergeMap;
+    private final LinkedHashMap<Node, LinkedHashMap<Integer, Set<Node>>> splitMap;
 
 
     public TokenLabelEngine(ProcessGraph graph) {
@@ -358,56 +358,27 @@ public class TokenLabelEngine {
         return graph;
     }
 
-    public void setGraph(ProcessGraph graph) {
-        this.graph = graph;
-    }
-
     public LinkedHashMap<Node, List<Edge>> getLoopFreeIn() {
         return loopFreeIn;
-    }
-
-    public void setLoopFreeIn(LinkedHashMap<Node, List<Edge>> loopFreeIn) {
-        this.loopFreeIn = loopFreeIn;
     }
 
     public LinkedHashMap<Node, List<Edge>> getLoopFreeOut() {
         return loopFreeOut;
     }
 
-    public void setLoopFreeOut(LinkedHashMap<Node, List<Edge>> loopFreeOut) {
-        this.loopFreeOut = loopFreeOut;
-    }
-
     public LinkedHashMap<Edge, List<TokenLabel>> getEdgeTokens() {
         return edgeTokens;
-    }
-
-    public void setEdgeTokens(LinkedHashMap<Edge, List<TokenLabel>> edgeTokens) {
-        this.edgeTokens = edgeTokens;
     }
 
     public LinkedHashMap<Node, List<TokenLabel>> getNodeTokens() {
         return nodeTokens;
     }
 
-    public void setNodeTokens(LinkedHashMap<Node, List<TokenLabel>> nodeTokens) {
-        this.nodeTokens = nodeTokens;
-    }
-
     public LinkedHashMap<Node, List<Node>> getCleanMergeMap() {
         return CleanMergeMap;
-    }
-
-    public void setCleanMergeMap(LinkedHashMap<Node, List<Node>> mergeMap) {
-        this.CleanMergeMap = mergeMap;
     }
 
     public LinkedHashMap<Node, LinkedHashMap<Integer, Set<Node>>> getSplitMap() {
         return splitMap;
     }
-
-    public void setSplitMap(LinkedHashMap<Node, LinkedHashMap<Integer, Set<Node>>> splitMap) {
-        this.splitMap = splitMap;
-    }
-
 }

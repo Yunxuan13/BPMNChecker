@@ -12,16 +12,16 @@ public class ProcessGraph {
     private final LinkedHashMap<String, Node> nodes;
     private final List<Edge> edges;
 
-    private LinkedHashMap<String, List<Node>> scopeNodes;
-    private LinkedHashMap<String, Set<Edge>> scopeBackEdges;
-    private LinkedHashMap<String, List<Edge>> scopeEdges;
+    private final LinkedHashMap<String, List<Node>> scopeNodes;
+    private final LinkedHashMap<String, Set<Edge>> scopeBackEdges;
+    private final LinkedHashMap<String, List<Edge>> scopeEdges;
 
     // loop-free incoming and outgoing
-    private LinkedHashMap<Node, List<Edge>> loopFreeIn;
-    private LinkedHashMap<Node, List<Edge>> loopFreeOut;
+    private final LinkedHashMap<Node, List<Edge>> loopFreeIn;
+    private final LinkedHashMap<Node, List<Edge>> loopFreeOut;
 
     // have to ensure each branch index follows the outgoing edges' sequence
-    private LinkedHashMap<Node, LinkedHashMap<Integer, Boolean>> conditionSplitTask;
+    private final LinkedHashMap<Node, LinkedHashMap<Integer, Boolean>> conditionSplitTask;
 
     public ProcessGraph(LinkedHashMap<String, Node> nodes, List<Edge> edges) {
         this.nodes = nodes;
@@ -42,6 +42,7 @@ public class ProcessGraph {
         this.buildConditionSplitTask();
 
     }
+    
 
     public Set<Node> reachableInScope(List<Node> nodesInScope) {
 
@@ -137,7 +138,6 @@ public class ProcessGraph {
 
     private void buildScopeNodes() {
         // scope nodes
-        this.scopeNodes = new LinkedHashMap<>();
         for (Node node : nodes.values()) {
             String nodeScope = this.getScope(node);
             if (!scopeNodes.containsKey(nodeScope)) {
@@ -152,8 +152,6 @@ public class ProcessGraph {
 
     private void buildScopeBackEdges() {
         // scope back edges
-        this.scopeBackEdges = new LinkedHashMap<>();
-
         for (String scope : this.scopeNodes.keySet()) {
             // all nodes in one scope
             List<Node> nodeList = this.scopeNodes.get(scope);
@@ -295,47 +293,23 @@ public class ProcessGraph {
         return scopeNodes;
     }
 
-    public void setScopeNodes(LinkedHashMap<String, List<Node>> scopeNodes) {
-        this.scopeNodes = scopeNodes;
-    }
-
     public LinkedHashMap<String, Set<Edge>> getScopeBackEdges() {
         return scopeBackEdges;
-    }
-
-    public void setScopeBackEdges(LinkedHashMap<String, Set<Edge>> scopeBackEdges) {
-        this.scopeBackEdges = scopeBackEdges;
-    }
-
-    public LinkedHashMap<Node, List<Edge>> getLoopFreeOut() {
-        return loopFreeOut;
-    }
-
-    public void setLoopFreeOut(LinkedHashMap<Node, List<Edge>> loopFreeOut) {
-        this.loopFreeOut = loopFreeOut;
-    }
-
-    public LinkedHashMap<Node, List<Edge>> getLoopFreeIn() {
-        return loopFreeIn;
-    }
-
-    public void setLoopFreeIn(LinkedHashMap<Node, List<Edge>> loopFreeIn) {
-        this.loopFreeIn = loopFreeIn;
     }
 
     public LinkedHashMap<String, List<Edge>> getScopeEdges() {
         return scopeEdges;
     }
 
-    public void setScopeEdges(LinkedHashMap<String, List<Edge>> scopeEdges) {
-        this.scopeEdges = scopeEdges;
+    public LinkedHashMap<Node, List<Edge>> getLoopFreeIn() {
+        return loopFreeIn;
+    }
+
+    public LinkedHashMap<Node, List<Edge>> getLoopFreeOut() {
+        return loopFreeOut;
     }
 
     public LinkedHashMap<Node, LinkedHashMap<Integer, Boolean>> getConditionSplitTask() {
         return conditionSplitTask;
-    }
-
-    public void setConditionSplitTask(LinkedHashMap<Node, LinkedHashMap<Integer, Boolean>> conditionSplitTask) {
-        this.conditionSplitTask = conditionSplitTask;
     }
 }

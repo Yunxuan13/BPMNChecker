@@ -18,19 +18,21 @@ public final class SuggestionBuilder {
             node = error.getNodes().get(0).toString();
         }
 
-        String startWords = "Please take a look at the \"Error-Message\", find out the issues and you try to repair them. " +
-                "Followings are some suggestions to each kind of issue, you should first read the original prompt and process description carefully, " +
-                "then try to repair them with help of suggestions if it fits the requirements. ";
+//        String startWords = "Please take a look at the \"Error-Message\", find out the issues and you try to repair them. " +
+//                "Followings are some suggestions to each kind of issue, " +
+//                "you should first read the process description carefully, " +
+//                "then try to repair them with help of suggestions if it fits the requirements. ";
 
         StringBuilder suggestion = new StringBuilder();
-        suggestion.append(startWords).append("\nSuggestion: ");
+        // suggestion.append(startWords).append("\nSuggestion: ");
 
         String body = switch (error.getErrorId()) {
 
             // ✅Isolated Node
-            case "CON-01" -> "connect '" + node + "' to the process, " +
-                    "either according to the process description, add an incoming sequence flow " +
-                    "from a preceding element and an outgoing flow to a following one, " +
+            case "CON-01" -> "Connect '" + node + "' to the process, " +
+                    "either according to the process description, add an incoming sequence flow to a end-event, " +
+                    "from a preceding element add an outgoing flow to a following one for a start-event, " +
+                    "add appropriate incoming and outgoing edge(s) to the node if it is neither start nor end, " +
                     "or remove the node if it is not needed.";
 
             // ✅missing incoming
@@ -56,8 +58,7 @@ public final class SuggestionBuilder {
             case "SE-02" -> "Declare an end event in this scope and connect the final element of the flow to it.";
 
             // ✅multiple start
-            case "SE-03" ->
-                    "Keep only single start event in this scope.";
+            case "SE-03" -> "Keep only single start event in this scope.";
 
             // ✅start with in
             case "SE-04" -> "Remove the incoming sequence flow(s) of start event '" + node + "'.";
@@ -74,15 +75,18 @@ public final class SuggestionBuilder {
                     "Insert an appropriate gateway before '" + node + "' and move its multiple incoming flows through that gateway.";
 
             // ✅mismatched
-            case "GTW-03" -> "The type of the splits (" + getCompactNode(error) + ") merging at the join gateway '"
+            case "GTW-03" -> "The type of the splits (" + getCompactNode(error, false) + ") merging at the join gateway '"
                     + node + "' should keep the same as the join." +
                     "Please keep, any split gateway is only merged at the paired, same-type, single join gateway.";
 
             // ✅nested
-            case "GTW-04" ->
-                    "Restructure the blocks that violated the single-enter single-exit. Join gateway '" + node +
-                            "' should not merge more than two split gateways, but there are: [" + getCompactNode(error) +
-                            "]. Try to close inner block before merging outer blocks, many splits merge at one join gateway is also not recommended.";
+            case "GTW-04" -> "Restructure the blocks that violated the single-enter single-exit. " +
+                    "Join node '" + node + "' should not merge more than one split gateway. " +
+                    "Also, it cannot merge only part of branches while the other branches do not stop at OTHER end event than current branches'. " +
+                    "Involved split nodes are: [" + getCompactNode(error, false) + "]. " +
+                    "Try to close inner block before merging outer blocks. " +
+                    "All branches that terminate at the same end event should converge at one and only one common merge node. " +
+                    "Many splits merge at one join gateway is also not recommended, even if all branches are correctly merged.";
 
             // ✅both split and join
             case "GTW-05" -> "Gateway '" + node + "' played two roles (split and join). " +
@@ -98,7 +102,7 @@ public final class SuggestionBuilder {
 
             // ✅Deadlock risk
             case "AND-01" -> "There exist risk at the merge parallel gateway '" + node + "', " +
-                    "split nodes: [" + getCompactNode(error) + "] lead to the issue, " +
+                    "split nodes: [" + getCompactNode(error, false) + "] lead to the issue, " +
                     "there exist possibility that merge gateway could not be activated " +
                     "because of the endless waiting for incoming sequence flows that will never arrive.";
 
@@ -107,8 +111,7 @@ public final class SuggestionBuilder {
                     "' (syntax: '-->|condition|'); at most one flow may stay unlabelled as the default.";
 
             // ✅empty
-            case "SUB-01" -> "If this is a collapsed subprocess in form id:subprocess:(label), nothing to do here. " +
-                    "Otherwise, " + "add at least one element inside subprocess '" + node + "'.";
+            case "SUB-01" -> "Add at least one element inside subprocess '" + node + "'.";
 
             // ✅boundary
             case "SUB-02" -> "Try to remove the sequence flow from (without label block) '" + edgeSource(error) + "' to '" + edgeTarget(error) +
@@ -119,15 +122,16 @@ public final class SuggestionBuilder {
 
             // ✅duplicate
             case "EDGE-01" -> "Remove the duplicate sequence flow between node with key (without label block) '"
-                    + edgeSource(error) + "' and '" + edgeTarget(error) + "', keep only single flow.";
+                    + edgeSource(error) + "' and '" + edgeTarget(error) +
+                    "', keep only single flow with accurate condition if it is needed.";
 
             // ✅no reachable end
             case "LOOP-01" -> "Add an exit to the loop entered at '" + node +
                     "', for example give one gateway inside the loop a conditional flow that leads towards an end event.";
 
             // ✅and as loop gateway
-            case "LOOP-02" -> "Let an exclusive gateway control the loop between (without label block) '" + edgeSource(error)
-                    + "' and '" + edgeTarget(error) + "' instead of a parallel gateway.";
+            case "LOOP-02" -> "Let an exclusive gateway control the loop. Parallel gateway is definitely prohibited for controlling loop. " +
+                    "Involved parallel gateway that directly influenced the loop: [" + getCompactNode(error, true) + "].";
 
             default -> null;
         };
@@ -137,7 +141,7 @@ public final class SuggestionBuilder {
         return suggestion.toString();
     }
 
-    private static String getCompactNode(BPMNError error) {
+    private static String getCompactNode(BPMNError error, boolean withMain) {
 
         List<Node> nodes = error.getNodes();
         if (nodes == null) {
@@ -145,9 +149,10 @@ public final class SuggestionBuilder {
         }
 
         StringBuilder builder = new StringBuilder();
+        int start = withMain ? 0 : 1;
 
-        for (int i = 1; i < nodes.size(); i++) {
-            if (i == 1) {
+        for (int i = start; i < nodes.size(); i++) {
+            if (i == start) {
                 builder.append("'").append(nodes.get(i)).append("'");
             } else {
                 builder.append(", '").append(nodes.get(i)).append("'");

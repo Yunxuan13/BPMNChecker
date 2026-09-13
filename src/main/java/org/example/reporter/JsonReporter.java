@@ -75,7 +75,7 @@ public class JsonReporter {
         List<JsonNode> errorNodes = new ArrayList<>();
         for (Node node : error.getNodes()) {
             JsonNode n = new JsonNode();
-            n.setKey(node.getKey());
+            n.setKey(node.toString());
             n.setLabel(node.getLabel());
             n.setType(node.getType().name().toLowerCase());
             n.setSubprocess(node.getLocation());

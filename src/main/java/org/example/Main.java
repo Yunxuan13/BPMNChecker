@@ -144,10 +144,10 @@ public class Main {
         try {
             reporter = check(file.getPath());
         } catch (InputValidationException e) {
-            csv.write(row(dataset, name, "INPUT_NOT_SUPPORTED", "", "", "", e.getReason().name() + ": " + e.getMessage(), "") + "\n");
+            csv.write(row(dataset, name, "INPUT_NOT_SUPPORTED", "", "", "", e.getReason().name() + ": " + e.getMessage()) + "\n");
             return INPUT_NOT_SUPPORTED;
         } catch (Exception e) {
-            csv.write(row(dataset, name, "PROCESSING_FAILED", "","","",e.getMessage(),"") + "\n");
+            csv.write(row(dataset, name, "PROCESSING_FAILED", "","","",e.getMessage()) + "\n");
             return PROCESSING_FAILED;
         }
 
@@ -160,7 +160,7 @@ public class Main {
 
         List<JsonIssue> issues = reporter.getIssues();
         if (issues.isEmpty()) {
-            csv.write(row(dataset, name, "CLEAN", "", "", "", "", "") + "\n");
+            csv.write(row(dataset, name, "CLEAN", "", "", "", "") + "\n");
             return 0;
         }
 
@@ -181,11 +181,11 @@ public class Main {
             builder.append(node.getKey());
         }
 
-        return row(dataset, name, issue.getErrorId(), issue.getSeverity(), issue.getScope(), builder.toString(), issue.getMessage(), "");
+        return row(dataset, name, issue.getErrorId(), issue.getSeverity(), issue.getScope(), builder.toString(), issue.getMessage());
     }
 
-    private static String row(String dataset, String file, String errorId, String severity, String scope, String nodes, String message, String human) {
-        return convert(dataset) + "," + convert(file) + "," + convert(errorId) + "," + convert(severity) + "," + convert(scope) + "," + convert(nodes) + "," + convert(message) + "," + convert(human);
+    private static String row(String dataset, String file, String errorId, String severity, String scope, String nodes, String message) {
+        return convert(dataset) + "," + convert(file) + "," + convert(errorId) + "," + convert(severity) + "," + convert(scope) + "," + convert(nodes) + "," + convert(message);
     }
 
     private static String convert(String text) {
